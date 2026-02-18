@@ -124,23 +124,22 @@ const SECTOR_MAP: Record<string, string> = {
 export function extractBedPrefix(bedCode: string): string | null {
   const clean = bedCode.trim().toUpperCase();
 
-  // Skip purely alphabetical words that are colour/special names
-  if (/^[A-Z]+$/.test(clean) && clean.length <= 8) {
-    // Could be a colour name like AMARELA, VERDE, AZUL — not a structural code
-    if (['AMARELA', 'VERDE', 'AZUL', 'VERMELHA', 'LARANJA', 'ROXA'].includes(clean)) {
-      return null;
-    }
-  }
+  // Skip colour/special names
+  const COLOR_NAMES = ['AMARELA', 'VERDE', 'AZUL', 'VERMELHA', 'LARANJA', 'ROXA'];
+  if (COLOR_NAMES.includes(clean)) return null;
 
-  // Pattern: optional "E-" prefix, then letters+digits group
-  // Extract first alphabetic run after stripping leading "E-" or similar
-  const m = clean.match(/^(?:[A-Z]-)?([A-Z]+\d*[A-Z]*)/);
+  // Step 1: remove leading "E-" or "EN-" type prefix
+  const stripped = clean.replace(/^[A-Z]{1,2}-/, '');
+
+  // Step 2: extract leading letters+digits block (e.g., "CM1" from "CM1L24")
+  const m = stripped.match(/^([A-Z]+\d+|[A-Z]+)/);
   if (!m) return null;
 
-  const candidate = m[1];
-  // Prefer the longest matching key from SECTOR_MAP
+  const candidate = m[1]; // e.g., "CM1", "CM2", "UTI"
+
+  // Find longest matching key in SECTOR_MAP
   const matchedKey = Object.keys(SECTOR_MAP)
-    .filter((k) => candidate.startsWith(k))
+    .filter((k) => candidate.startsWith(k) || k.startsWith(candidate))
     .sort((a, b) => b.length - a.length)[0];
 
   return matchedKey ?? candidate;
@@ -159,14 +158,14 @@ export function detectBlockSector(blockRows: string[][]): string {
   const freq: Record<string, number> = {};
 
   for (const row of blockRows) {
-    // First cell is usually the "Enfermaria" / ward name
-    const bedCell = row[0]?.trim() ?? '';
-    // Also check second cell (Leito)
-    const leitoCell = row[1]?.trim() ?? '';
+    // Skip empty rows and column headers to avoid noise
+    if (isEmptyRow(row) || isColumnHeader(row)) continue;
 
-    for (const cell of [bedCell, leitoCell]) {
-      if (!cell) continue;
-      const prefix = extractBedPrefix(cell);
+    // Scan ALL cells in the row (columns may be shifted due to merged cells)
+    for (const cell of row) {
+      const trimmed = cell.trim();
+      if (!trimmed) continue;
+      const prefix = extractBedPrefix(trimmed);
       if (prefix) {
         freq[prefix] = (freq[prefix] ?? 0) + 1;
       }
