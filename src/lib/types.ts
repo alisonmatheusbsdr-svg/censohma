@@ -1,3 +1,24 @@
+export interface CleaningIssue {
+  type:
+    | 'empty_row'
+    | 'header_row'
+    | 'footer_row'
+    | 'vacant_bed'
+    | 'name_merged'
+    | 'summary_section'
+    | 'continuation_row';
+  count: number;
+  examples: string[];
+}
+
+export interface CleaningReport {
+  originalRowCount: number;
+  validRowCount: number;
+  patientCount: number;
+  issues: CleaningIssue[];
+  sectorsFound: { name: string; count: number }[];
+}
+
 export interface Patient {
   prontuario: string;
   name: string;

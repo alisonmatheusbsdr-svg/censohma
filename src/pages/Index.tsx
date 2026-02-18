@@ -5,16 +5,18 @@ import { FileUpload } from '@/components/FileUpload';
 import { ManualPaste } from '@/components/ManualPaste';
 import { ResultCards } from '@/components/ResultCards';
 import { PreviewTable } from '@/components/PreviewTable';
+import { CleaningReportPanel } from '@/components/CleaningReportPanel';
 import { parseOfficialFile } from '@/lib/parseOfficial';
 import { applyMapping } from '@/lib/parseManual';
 import { comparePatients, generateConsolidatedCSV } from '@/lib/compareData';
-import type { Patient, ColumnMapping, ComparisonResult } from '@/lib/types';
+import type { Patient, ColumnMapping, ComparisonResult, CleaningReport } from '@/lib/types';
 import { ArrowDownToLine, GitCompare, Stethoscope } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
   const { toast } = useToast();
   const [officialPatients, setOfficialPatients] = useState<Patient[]>([]);
+  const [cleaningReport, setCleaningReport] = useState<CleaningReport | null>(null);
   const [manualRows, setManualRows] = useState<string[][]>([]);
   const [manualMapping, setManualMapping] = useState<ColumnMapping>({ prontuario: null, name: null, age: null, sector: null });
   const [manualPatients, setManualPatients] = useState<Patient[]>([]);
@@ -22,8 +24,9 @@ const Index = () => {
 
   const handleOfficialFile = useCallback((data: ArrayBuffer) => {
     try {
-      const patients = parseOfficialFile(data);
+      const { patients, report } = parseOfficialFile(data);
       setOfficialPatients(patients);
+      setCleaningReport(report);
       setResult(null);
       toast({ title: `${patients.length} pacientes detectados no arquivo oficial.` });
     } catch {
@@ -93,6 +96,11 @@ const Index = () => {
           <FileUpload onFileLoaded={handleOfficialFile} />
           <ManualPaste onParsed={handleManualParsed} />
         </div>
+
+        {/* Cleaning Report */}
+        {cleaningReport && (
+          <CleaningReportPanel report={cleaningReport} patients={officialPatients} />
+        )}
 
         {/* Preview Tables */}
         {(officialPatients.length > 0 || manualPatients.length > 0) && (
