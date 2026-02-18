@@ -1,122 +1,120 @@
 
-# Diagnóstico e Correção: Setor "Desconhecido"
+# Plano: Reformulação dos Resultados da Comparação
 
-## Causa Raiz Identificada
+## O que muda e por quê
 
-Há dois problemas combinados que resultam em "Desconhecido" para todos os pacientes:
+Atualmente os 4 cards de resultado ficam num grid 2×2 com scroll interno limitado a `max-h-60` (≈240px). Com listas longas, o usuário não consegue ver todos os registros confortavelmente.
 
-### Problema 1 — `detectBlockSector` olha apenas colunas 0 e 1 (CRÍTICO)
-
-A função atual é:
-```typescript
-const bedCell  = row[0]?.trim() ?? '';   // só coluna 0
-const leitoCell = row[1]?.trim() ?? '';  // só coluna 1
-```
-
-No arquivo `R_CENSO18.xls`, o SheetJS pode retornar as linhas com colunas deslocadas — especialmente quando há células mescladas no cabeçalho do relatório. Se a coluna "Enfermaria" estiver em `row[2]` ou `row[3]` ao invés de `row[0]`, nenhum código de leito é encontrado e a função retorna `'Desconhecido'` para o bloco inteiro.
-
-### Problema 2 — Regex de `extractBedPrefix` não captura o número do setor (SECUNDÁRIO)
-
-O regex atual: `/^(?:[A-Z]-)?([A-Z]+\d*[A-Z]*)/`
-
-Para `E-CM1L24`:
-- `(?:[A-Z]-)?` → consome `E-` ✅
-- `([A-Z]+\d*[A-Z]*)` → captura `CM1L` (letras + dígitos + letras) ✅ teoricamente
-
-Porém `CM1L` não está no `SECTOR_MAP`, que tem chave `CM1`. O filtro `.filter(k => candidate.startsWith(k))` deveria funcionar pois `CM1L`.startsWith(`CM1`) = true — mas se a candidata for algo inesperado como `ECM1L24` (sem o traço), o regex captura `ECM1L` e nenhuma chave do mapa começa assim.
-
-### Problema 3 — O loop de busca de prefixo examina poucas colunas
-
-Mesmo que os índices estejam certos, linhas de cabeçalho e linhas vazias são incluídas no bloco antes de serem filtradas, poluindo a contagem de frequência.
+A proposta substitui o grid de cards por um layout de **abas (Tabs)** com painel de scroll generoso, além de renomear as categorias para a terminologia solicitada.
 
 ---
 
-## Solução
+## Nova terminologia das 4 categorias
 
-### Correção em `src/lib/cleanData.ts` — função `detectBlockSector`
+| Antes | Depois | Lógica (não muda) |
+|---|---|---|
+| Saídas / Altas | Retirar da Planilha | Está no manual, não está no censo oficial |
+| Admissões | Admissões | Está no censo oficial, não está no manual |
+| Transferências | Mudança de Setor | Mesmo prontuário, setor diferente entre manual e oficial |
+| Alerta de Dados | Alerta de Dados | Duplicatas, homônimos, divergência de idade |
 
-Em vez de olhar apenas `row[0]` e `row[1]`, a função deve **varrer todas as colunas de cada linha** em busca de qualquer célula que corresponda ao padrão de código de leito (`E-CM*`, `E-UTI*`, etc.):
+---
 
-```typescript
-export function detectBlockSector(blockRows: string[][]): string {
-  const freq: Record<string, number> = {};
+## Nova estrutura visual — Tabs com lista rolável
 
-  for (const row of blockRows) {
-    // Skip empty rows and column headers
-    if (isEmptyRow(row) || isColumnHeader(row)) continue;
-
-    // Scan ALL cells in the row, not just columns 0 and 1
-    for (const cell of row) {
-      const trimmed = cell.trim();
-      if (!trimmed) continue;
-      const prefix = extractBedPrefix(trimmed);
-      if (prefix) {
-        freq[prefix] = (freq[prefix] ?? 0) + 1;
-      }
-    }
-  }
-
-  if (Object.keys(freq).length === 0) return 'Desconhecido';
-
-  const dominant = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
-  return resolveSectorName(dominant);
-}
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│  Retirar da Planilha (12) │ Admissões (5) │ Mudança de Setor (3) │ Alertas (2) │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ● JOAO PAULO DE ALBUQUERQUE SILVA            #859419            │
+│    Clínica Médica I                                              │
+│  ─────────────────────────────────────────────────────────       │
+│  ● MARIA ROSA DE LIMA                         #1044478           │
+│    Clínica Médica I                                              │
+│  ─────────────────────────────────────────────────────────       │
+│  ... (scroll)                                                    │
+│                                                                  │
+│                                                          h-96    │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### Correção em `src/lib/cleanData.ts` — função `extractBedPrefix`
+Cada aba exibe:
+- **Contador** no badge da própria aba (sempre visível)
+- **Lista com scroll** de altura fixa `h-96` (≈384px — o dobro do atual)
+- **Informações completas** por paciente: nome, prontuário, setor
+- Para **Mudança de Setor**: mostra `Setor Anterior → Setor Novo` com ícone de seta
+- Para **Alertas**: mostra o tipo do alerta com badge colorido + lista de pacientes envolvidos
+- Mensagem vazia estilizada quando não há registros na categoria
 
-Tornar o regex mais robusto para capturar o padrão exato do arquivo:
+---
 
-```typescript
-export function extractBedPrefix(bedCode: string): string | null {
-  const clean = bedCode.trim().toUpperCase();
+## Detalhamento visual de cada aba
 
-  // Skip colour/special names (purely alphabetical, no digits)
-  const COLOR_NAMES = ['AMARELA', 'VERDE', 'AZUL', 'VERMELHA', 'LARANJA', 'ROXA'];
-  if (COLOR_NAMES.includes(clean)) return null;
+### Aba 1 — Retirar da Planilha
+```text
+[ícone vermelho] Paciente está no manual mas não aparece no censo oficial.
+                 Pode ter recebido alta ou transferência externa.
 
-  // Pattern: optional leading letter(s) + dash, then the meaningful part
-  // Handles: "E-CM1L24" → strip "E-" → "CM1L24" → prefix "CM1"
-  //          "E-CM2ADC" → strip "E-" → "CM2ADC" → prefix "CM2"
-  //          "UTI-01"   → strip nothing → prefix "UTI"
-  const stripped = clean.replace(/^[A-Z]{1,2}-/, ''); // remove leading "E-" or "EN-"
+• JOAO PAULO...           #859419 • Clínica Médica I
+• MARIA ROSA DE LIMA      #1044478 • Clínica Médica I
+```
 
-  // Extract the leading letters+digits block (e.g., "CM1" from "CM1L24")
-  const m = stripped.match(/^([A-Z]+\d+|[A-Z]+)/);
-  if (!m) return null;
+### Aba 2 — Admissões
+```text
+[ícone verde] Paciente aparece no censo oficial mas não está no manual.
+              Deve ser incluído na planilha.
 
-  const candidate = m[1]; // e.g., "CM1", "CM2", "UTI1", "UTI"
+• ADEILDO DA SILVA        #1051245 • Clínica Médica II
+```
 
-  // Find the longest matching key in SECTOR_MAP
-  const matchedKey = Object.keys(SECTOR_MAP)
-    .filter((k) => candidate.startsWith(k) || k.startsWith(candidate))
-    .sort((a, b) => b.length - a.length)[0];
+### Aba 3 — Mudança de Setor
+```text
+[ícone laranja] Mesmo prontuário encontrado em setores diferentes.
+                Atualizar o setor na planilha manual.
 
-  return matchedKey ?? candidate;
-}
+• DIELSON ELIAS DOS SANTOS    #1051245
+  Clínica Médica I  →  Clínica Médica II
+```
+
+### Aba 4 — Alertas de Dados
+```text
+[badge: DUPLICADO] Prontuário 859419 duplicado na lista Manual (2x)
+  → JOAO PAULO... #859419 | JOAO PAULO... #859419
+
+[badge: HOMÔNIMO] "MARIA JOSE" com prontuários diferentes
+  → MARIA JOSE #123 | MARIA JOSE #456
 ```
 
 ---
 
-## Arquivos a Modificar
+## Arquivos a modificar
 
-### `src/lib/cleanData.ts`
+### `src/components/ResultCards.tsx` — reescrever completamente
 
-Duas mudanças cirúrgicas:
+Substituir o grid de 4 cards independentes por um único componente `Tabs` do Radix UI (já disponível no projeto via `@radix-ui/react-tabs`):
 
-1. **`extractBedPrefix`**: Substituir o regex por uma abordagem de dois passos:
-   - Primeiro: remover prefixo líder tipo `E-`, `EN-`
-   - Segundo: extrair bloco `letras+dígitos` do início
-   - Resultado: `E-CM1L24` → strip `E-` → `CM1L24` → extrai `CM1` ✅
+- Importar `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` de `@/components/ui/tabs`
+- 4 triggers, cada um com ícone + label + badge de contagem
+- Dentro de cada `TabsContent`: `ScrollArea` com altura `h-96`
+- Cores dos triggers por categoria:
+  - Retirar da Planilha: badge vermelho (`destructive`)
+  - Admissões: badge verde (`success`)
+  - Mudança de Setor: badge laranja (`warning`)
+  - Alertas: badge amarelo (`warning`)
+- Default tab: a que tiver mais registros (ou `retirar` por padrão)
 
-2. **`detectBlockSector`**: Varrer **todas as colunas** de cada linha (não só colunas 0 e 1), com filtragem de linhas vazias e headers antes da contagem.
+### Nenhum outro arquivo muda
 
-Nenhum outro arquivo precisa ser alterado — a correção é toda dentro de `cleanData.ts`.
+- `compareData.ts` — lógica de comparação está correta, não muda
+- `types.ts` — tipos `ComparisonResult` estão corretos, não mudam
+- `Index.tsx` — já passa `result` para `ResultCards`, não muda
+- `KPICards.tsx` — não muda
 
 ---
 
-## Por que apenas `cleanData.ts` precisa mudar
+## Sequência de implementação
 
-- `parseOfficial.ts` já chama `detectBlockSector(block.rows)` corretamente
-- O setor já é passado para `processBlock` e atribuído a cada paciente
-- A cadeia de chamadas está certa — apenas a lógica de detecção do prefixo estava restrita demais
+1. Reescrever `src/components/ResultCards.tsx` com a estrutura de Tabs
+2. Ajustar labels, ícones e cores de cada aba
+3. Garantir que o scroll funciona corretamente dentro de cada TabsContent
