@@ -1,220 +1,122 @@
 
-# Plano Final: Limpeza Inteligente de Dados + Detecção de Setor por Bloco
+# Diagnóstico e Correção: Setor "Desconhecido"
 
-## Resumo do que muda
+## Causa Raiz Identificada
 
-A funcionalidade atual tem um parser simples que não lida com a complexidade real do arquivo SoulMV. Vamos reescrever o parser do arquivo oficial com um pipeline de limpeza de 3 camadas e adicionar um painel de diagnóstico visual.
+Há dois problemas combinados que resultam em "Desconhecido" para todos os pacientes:
 
----
+### Problema 1 — `detectBlockSector` olha apenas colunas 0 e 1 (CRÍTICO)
 
-## Confirmações da análise do arquivo real (R_CENSO18.xls + imagem)
-
-**Estrutura de colunas confirmada (da esquerda para a direita):**
-
-```text
-Enfermaria | Leito | S | Atend | Paciente | Nome | Data_Nasc | Convênio | ...
-```
-
-- **Atend** (ex: 4122448) → número do episódio, IGNORAR
-- **Paciente** (ex: 1047948) → prontuário real, USAR ESTE
-- **Data** (ex: 28/07/1963) → data de nascimento → calcular idade por `hoje - nascimento`
-- **Nome** aparece ENTRE Paciente e Data de Nascimento
-- Nomes longos (ex: "ADEILDO DA SILVA PEREEIRA") são partidos em 2 linhas com o mesmo Atend + Paciente
-
-**Estrutura de blocos confirmada:**
-- Cada bloco começa com `Unidade de Internação :`
-- Cada bloco termina com `Total de Leitos: XX`
-- O setor real é determinado pelo prefixo predominante dos leitos no bloco (CM1 → Clínica Médica I)
-- A partir de `Resumo Estatístico`, tudo é ignorado
-
----
-
-## Arquivos a criar / modificar
-
-### 1. NOVO — `src/lib/cleanData.ts`
-
-Funções puras e tipos para o pipeline de limpeza:
-
-**Tipos exportados:**
+A função atual é:
 ```typescript
-interface CleaningIssue {
-  type: 'empty_row' | 'header_row' | 'footer_row' | 'vacant_bed' |
-        'name_merged' | 'summary_section' | 'continuation_row';
-  count: number;
-  examples: string[];
-}
-
-export interface CleaningReport {
-  originalRowCount: number;
-  validRowCount: number;
-  patientCount: number;
-  issues: CleaningIssue[];
-  sectorsFound: { name: string; count: number }[];
-}
+const bedCell  = row[0]?.trim() ?? '';   // só coluna 0
+const leitoCell = row[1]?.trim() ?? '';  // só coluna 1
 ```
 
-**Funções de detecção de linha:**
-- `isEmptyRow(row)` → todas as células são `''` ou só espaços
-- `isColumnHeader(row)` → linha contém `"Enfermaria"` E `"Leito"` E `"Atend"`
-- `isFooterRow(row)` → linha contém `"Total de Leitos"` (marca fim de bloco)
-- `isSummarySection(row)` → linha contém `"Resumo Estatístico"` (tudo após isso é ignorado)
-- `isVacantBed(row)` → status da célula é `"V"` (vago)
-- `isContinuationRow(currentRow, prevRow)` → mesmo Atend + Paciente que a linha anterior, sem `/` na posição da coluna de internação
+No arquivo `R_CENSO18.xls`, o SheetJS pode retornar as linhas com colunas deslocadas — especialmente quando há células mescladas no cabeçalho do relatório. Se a coluna "Enfermaria" estiver em `row[2]` ou `row[3]` ao invés de `row[0]`, nenhum código de leito é encontrado e a função retorna `'Desconhecido'` para o bloco inteiro.
 
-**Funções de detecção de setor:**
-- `extractBedPrefix(bedCode)` → extrai prefixo de `"E-CM1L24"` → `"CM1"`, de `"E-CM2ADC"` → `"CM2"`
-- `resolveSectorName(prefix)` → mapeia prefixo → nome legível:
-  - `CM1` → `Clínica Médica I`
-  - `CM2` → `Clínica Médica II`
-  - `UTI` → `UTI`
-  - `PED` → `Pediatria`
-  - `CG` → `Clínica Geral`
-  - `MAT` → `Maternidade`
-  - Não encontrado → usa o código bruto como fallback
-- `detectBlockSector(blockRows)` → conta prefixos não-especiais (ignora `AMARELA`, leitos alfanuméricos puros) e retorna o mais frequente
+### Problema 2 — Regex de `extractBedPrefix` não captura o número do setor (SECUNDÁRIO)
 
-**Função de relatório:**
-- `buildCleaningReport(original, issues, patients, sectors)` → monta o objeto `CleaningReport`
+O regex atual: `/^(?:[A-Z]-)?([A-Z]+\d*[A-Z]*)/`
+
+Para `E-CM1L24`:
+- `(?:[A-Z]-)?` → consome `E-` ✅
+- `([A-Z]+\d*[A-Z]*)` → captura `CM1L` (letras + dígitos + letras) ✅ teoricamente
+
+Porém `CM1L` não está no `SECTOR_MAP`, que tem chave `CM1`. O filtro `.filter(k => candidate.startsWith(k))` deveria funcionar pois `CM1L`.startsWith(`CM1`) = true — mas se a candidata for algo inesperado como `ECM1L24` (sem o traço), o regex captura `ECM1L` e nenhuma chave do mapa começa assim.
+
+### Problema 3 — O loop de busca de prefixo examina poucas colunas
+
+Mesmo que os índices estejam certos, linhas de cabeçalho e linhas vazias são incluídas no bloco antes de serem filtradas, poluindo a contagem de frequência.
 
 ---
 
-### 2. MODIFICADO — `src/lib/parseOfficial.ts`
+## Solução
 
-Reescrita completa com algoritmo de **dois passes**:
+### Correção em `src/lib/cleanData.ts` — função `detectBlockSector`
 
-**Retorno muda de `Patient[]` para `{ patients: Patient[], report: CleaningReport }`**
+Em vez de olhar apenas `row[0]` e `row[1]`, a função deve **varrer todas as colunas de cada linha** em busca de qualquer célula que corresponda ao padrão de código de leito (`E-CM*`, `E-UTI*`, etc.):
 
-**Passe 1 — Segmentação em blocos:**
-```text
-Para cada linha da planilha:
-  Se contém "Resumo Estatístico" → PARAR (ignorar tudo após)
-  Se contém "Unidade de Internação" → iniciar novo bloco
-  Se contém "Total de Leitos" → encerrar bloco atual
-  Senão → adicionar linha ao bloco corrente
-```
-
-**Passe 2 — Processamento por bloco:**
-```text
-Para cada bloco:
-  1. Detectar setor dominante via prefixo de leito (detectBlockSector)
-  2. Para cada linha do bloco:
-     a. Ignorar se: vazia, header de coluna, rodapé de total, leito vago (V)
-     b. Procurar data no formato dd/mm/yyyy → esta É a data de nascimento
-     c. À esquerda da data: Nome (texto longo) → Paciente (segundo número) → Atend (primeiro número, ignorar)
-     d. Calcular idade: hoje - data de nascimento
-     e. Verificar se é linha de continuação (mesmo Atend/Paciente da anterior, sem "/"):
-        - SE sim: concatenar fragmento ao nome do registro anterior, descartar linha
-     f. Criar registro Patient com setor do bloco
-  3. Retornar pacientes do bloco + contadores para o relatório
-```
-
-**Lógica de extração de Prontuário (corrigida):**
-```text
-À esquerda do Nome, há dois números: [Atend] [Paciente]
-O prontuário correto é o SEGUNDO número (Paciente = menor, mais à direita antes do nome)
-O parser vai coletar todos os IDs numéricos à esquerda do nome e pegar o ÚLTIMO antes do nome
-```
-
----
-
-### 3. NOVO — `src/components/CleaningReport.tsx`
-
-Card colapsável exibido após o upload do arquivo, antes da PreviewTable:
-
-**Layout visual:**
-```text
-┌─────────────────────────────────────────────────────┐
-│  ✨ Limpeza Automática Concluída              [∨]   │
-│                                                     │
-│  Linhas brutas no arquivo:           390            │
-│  Linhas vazias removidas:            198            │
-│  Cabeçalhos/rodapés removidos:        12            │
-│  Leitos vagos ignorados:               1            │
-│  Nomes partidos reunificados:          3            │
-│  Seções de resumo ignoradas:          62            │
-│                                                     │
-│  Setores detectados:                                │
-│    Clínica Médica I   ••••••••••  54 pacientes      │
-│    Clínica Médica II  ████████    30 pacientes      │
-│                                                     │
-│  Total de pacientes válidos:          84            │
-│                                                     │
-│  [ Baixar Dados Limpos (.csv) ]                     │
-└─────────────────────────────────────────────────────┘
-```
-
-- Cor do card: azul claro discreto (não conflita com os cards de resultado)
-- Colapsável: clicando no título, o card fecha e mostra só o resumo `"84 pacientes extraídos de 2 setores"`
-- Botão "Baixar Dados Limpos" gera CSV com os pacientes limpos para auditoria
-
----
-
-### 4. MODIFICADO — `src/lib/types.ts`
-
-Adicionar o tipo `CleaningReport` exportado (ou manter em `cleanData.ts` e importar de lá):
 ```typescript
-export interface CleaningIssue {
-  type: string;
-  count: number;
-  examples: string[];
-}
+export function detectBlockSector(blockRows: string[][]): string {
+  const freq: Record<string, number> = {};
 
-export interface CleaningReport {
-  originalRowCount: number;
-  validRowCount: number;
-  patientCount: number;
-  issues: CleaningIssue[];
-  sectorsFound: { name: string; count: number }[];
+  for (const row of blockRows) {
+    // Skip empty rows and column headers
+    if (isEmptyRow(row) || isColumnHeader(row)) continue;
+
+    // Scan ALL cells in the row, not just columns 0 and 1
+    for (const cell of row) {
+      const trimmed = cell.trim();
+      if (!trimmed) continue;
+      const prefix = extractBedPrefix(trimmed);
+      if (prefix) {
+        freq[prefix] = (freq[prefix] ?? 0) + 1;
+      }
+    }
+  }
+
+  if (Object.keys(freq).length === 0) return 'Desconhecido';
+
+  const dominant = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+  return resolveSectorName(dominant);
+}
+```
+
+### Correção em `src/lib/cleanData.ts` — função `extractBedPrefix`
+
+Tornar o regex mais robusto para capturar o padrão exato do arquivo:
+
+```typescript
+export function extractBedPrefix(bedCode: string): string | null {
+  const clean = bedCode.trim().toUpperCase();
+
+  // Skip colour/special names (purely alphabetical, no digits)
+  const COLOR_NAMES = ['AMARELA', 'VERDE', 'AZUL', 'VERMELHA', 'LARANJA', 'ROXA'];
+  if (COLOR_NAMES.includes(clean)) return null;
+
+  // Pattern: optional leading letter(s) + dash, then the meaningful part
+  // Handles: "E-CM1L24" → strip "E-" → "CM1L24" → prefix "CM1"
+  //          "E-CM2ADC" → strip "E-" → "CM2ADC" → prefix "CM2"
+  //          "UTI-01"   → strip nothing → prefix "UTI"
+  const stripped = clean.replace(/^[A-Z]{1,2}-/, ''); // remove leading "E-" or "EN-"
+
+  // Extract the leading letters+digits block (e.g., "CM1" from "CM1L24")
+  const m = stripped.match(/^([A-Z]+\d+|[A-Z]+)/);
+  if (!m) return null;
+
+  const candidate = m[1]; // e.g., "CM1", "CM2", "UTI1", "UTI"
+
+  // Find the longest matching key in SECTOR_MAP
+  const matchedKey = Object.keys(SECTOR_MAP)
+    .filter((k) => candidate.startsWith(k) || k.startsWith(candidate))
+    .sort((a, b) => b.length - a.length)[0];
+
+  return matchedKey ?? candidate;
 }
 ```
 
 ---
 
-### 5. MODIFICADO — `src/pages/Index.tsx`
+## Arquivos a Modificar
 
-- Adicionar estado: `const [cleaningReport, setCleaningReport] = useState<CleaningReport | null>(null)`
-- Atualizar `handleOfficialFile`:
-  ```typescript
-  const { patients, report } = parseOfficialFile(data);
-  setOfficialPatients(patients);
-  setCleaningReport(report);
-  ```
-- Renderizar `<CleaningReportPanel>` após a área de input, antes do `<PreviewTable>`
+### `src/lib/cleanData.ts`
 
----
+Duas mudanças cirúrgicas:
 
-## O que NÃO muda
+1. **`extractBedPrefix`**: Substituir o regex por uma abordagem de dois passos:
+   - Primeiro: remover prefixo líder tipo `E-`, `EN-`
+   - Segundo: extrair bloco `letras+dígitos` do início
+   - Resultado: `E-CM1L24` → strip `E-` → `CM1L24` → extrai `CM1` ✅
 
-- `src/lib/compareData.ts` — lógica de comparação inalterada
-- `src/lib/parseManual.ts` — parser de texto manual inalterado
-- `src/components/ResultCards.tsx` — cards de resultado inalterados
-- `src/components/PreviewTable.tsx` — tabela de preview inalterada
-- `src/components/ManualPaste.tsx` — área de colagem inalterada
-- `src/components/KPICards.tsx` — KPIs inalterados
-- Design geral da aplicação
+2. **`detectBlockSector`**: Varrer **todas as colunas** de cada linha (não só colunas 0 e 1), com filtragem de linhas vazias e headers antes da contagem.
+
+Nenhum outro arquivo precisa ser alterado — a correção é toda dentro de `cleanData.ts`.
 
 ---
 
-## Regras de limpeza completas para SoulMV
+## Por que apenas `cleanData.ts` precisa mudar
 
-| Problema | Critério | Ação |
-|---|---|---|
-| Linha vazia | Todas as células são `''` ou espaço | Remover |
-| Header de coluna | Contém `"Enfermaria"` + `"Leito"` + `"Atend"` | Remover |
-| Rodapé de totais | Contém `"Total de Leitos"` | Encerrar bloco |
-| Seção de resumo | Contém `"Resumo Estatístico"` | Parar todo processamento |
-| Leito vago | Status `"V"` | Ignorar (não é paciente) |
-| Continuação de nome | Mesmo Atend+Paciente da linha anterior, sem `/` | Concatenar ao nome anterior |
-| Prontuário errado | Primeiro número = Atend | Usar segundo número = Paciente |
-| Setor desconhecido | `AMARELA` e leitos especiais | Herdar setor do bloco |
-| Prefixo não mapeado | Código não está na tabela | Usar código bruto como fallback |
-
----
-
-## Sequência de implementação
-
-1. Criar `src/lib/cleanData.ts` — todas as funções puras e tipos
-2. Reescrever `src/lib/parseOfficial.ts` — dois passes, retorno com relatório
-3. Criar `src/components/CleaningReport.tsx` — painel de diagnóstico
-4. Modificar `src/lib/types.ts` — adicionar tipos de limpeza
-5. Modificar `src/pages/Index.tsx` — conectar tudo e exibir painel
+- `parseOfficial.ts` já chama `detectBlockSector(block.rows)` corretamente
+- O setor já é passado para `processBlock` e atribuído a cada paciente
+- A cadeia de chamadas está certa — apenas a lógica de detecção do prefixo estava restrita demais
