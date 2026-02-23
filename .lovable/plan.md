@@ -1,61 +1,55 @@
 
-# Exportação em Excel (.xlsx) em vez de CSV
 
-## O que muda
+# Ajuste na Exportação do Censo Consolidado
 
-Dois pontos de download existentes serão convertidos de CSV para Excel (.xlsx):
+## Estrutura atual das colunas
 
-1. **"Exportar Censo Consolidado"** (botao em `Index.tsx`) -- usa `generateConsolidatedCSV` de `compareData.ts`
-2. **"Baixar Dados Limpos"** (botao no `CleaningReportPanel.tsx`) -- usa `downloadCleanCSV` local
+| Prontuario | Nome | Idade | Setor |
 
-O pacote `xlsx` (SheetJS) ja esta instalado no projeto, entao nao precisa de nova dependencia.
+## Nova estrutura das colunas
 
----
-
-## Arquivos a modificar
-
-### 1. `src/lib/compareData.ts`
-
-Renomear `generateConsolidatedCSV` para `generateConsolidatedExcel` e alterar o retorno de `string` (CSV) para `ArrayBuffer` (Excel):
-
-- Montar o array de dados consolidados (mesma logica atual: remover altas, atualizar setores, adicionar admissoes)
-- Usar `XLSX.utils.json_to_sheet` para criar a planilha
-- Usar `XLSX.write` com `bookType: 'xlsx'` para gerar o buffer
-- Retornar o `ArrayBuffer`
-
-### 2. `src/pages/Index.tsx`
-
-Atualizar `handleExport`:
-
-- Importar a funcao renomeada `generateConsolidatedExcel`
-- Criar o `Blob` com tipo `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
-- Nome do arquivo: `Censo_Consolidado.xlsx`
-
-### 3. `src/components/CleaningReportPanel.tsx`
-
-Converter `downloadCleanCSV` para `downloadCleanExcel`:
-
-- Importar `XLSX` (ja disponivel)
-- Montar array de objetos `{Prontuario, Nome, Idade, Setor}`
-- Usar `XLSX.utils.json_to_sheet` + `XLSX.utils.book_new` + `XLSX.write`
-- Gerar Blob com tipo Excel e baixar como `Dados_Limpos_Oficial.xlsx`
+| Status | Prontuario | Nome | Idade | *(vazia)* | Setor | Mudanca de Setor |
 
 ---
 
-## Detalhes tecnicos
+## Detalhes de cada nova coluna
 
-Padrao de geracao do arquivo Excel (aplicado nos dois pontos):
+### Coluna A — "Status"
+- **Mantido** — paciente que ja estava na lista manual e permanece
+- **Admissao** — paciente novo vindo do censo oficial
 
-```typescript
-import * as XLSX from 'xlsx';
+### Coluna entre Idade e Setor — em branco
+- Cabecalho vazio, celulas vazias — serve como separador visual
 
-const ws = XLSX.utils.json_to_sheet(data);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, 'Dados');
-const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-const blob = new Blob([buf], {
-  type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-});
+### Coluna apos Setor — "Mudanca de Setor"
+- Se o paciente teve transferencia: exibe `"Setor Anterior → Setor Novo"` (ex: `"Clinica Medica I → Clinica Medica II"`)
+- Se nao houve mudanca: celula vazia
+
+---
+
+## Arquivo a modificar
+
+### `src/lib/compareData.ts` — funcao `generateConsolidatedExcel`
+
+Alterar o mapeamento de dados (linhas 92-114):
+
+1. Criar um `Set` com os IDs das admissoes para identificar o status
+2. Criar um `Map` com o setor anterior dos transferidos (antes de sobrescrever)
+3. Montar cada linha com as 7 colunas na ordem correta:
+
+```text
+{
+  'Status':             admissionIds.has(p.prontuario) ? 'Admissão' : 'Mantido',
+  'Prontuário':         p.prontuario,
+  'Nome':               p.name,
+  'Idade':              p.age ?? '',
+  '':                   '',          // coluna vazia separadora
+  'Setor':              p.sector,
+  'Mudança de Setor':   oldSectorMap.get(p.prontuario)
+                          ? `${oldSectorMap.get(p.prontuario)} → ${p.sector}`
+                          : '',
+}
 ```
 
-Nenhuma logica de comparacao ou limpeza muda -- apenas o formato de saida.
+Nenhum outro arquivo muda — a logica de comparacao e a interface permanecem iguais.
+
