@@ -1,75 +1,61 @@
 
+# Exportação em Excel (.xlsx) em vez de CSV
 
-# Correção: Normalização de Nomes de Setor (Roman vs. Arábico)
+## O que muda
 
-## Problema
+Dois pontos de download existentes serão convertidos de CSV para Excel (.xlsx):
 
-A planilha manual usa "Clínica Médica 1" (número arábico) e o censo oficial retorna "Clínica Médica I" (número romano, vindo do `SECTOR_MAP`). Na comparação de setores em `compareData.ts`, o `.toLowerCase()` não resolve essa diferença, gerando falsas transferências.
+1. **"Exportar Censo Consolidado"** (botao em `Index.tsx`) -- usa `generateConsolidatedCSV` de `compareData.ts`
+2. **"Baixar Dados Limpos"** (botao no `CleaningReportPanel.tsx`) -- usa `downloadCleanCSV` local
 
-## Solução
-
-Criar uma função `normalizeSectorName` em `src/lib/cleanData.ts` e usá-la em `src/lib/compareData.ts` na comparação de setores.
+O pacote `xlsx` (SheetJS) ja esta instalado no projeto, entao nao precisa de nova dependencia.
 
 ---
 
 ## Arquivos a modificar
 
-### 1. `src/lib/cleanData.ts` — adicionar função de normalização
+### 1. `src/lib/compareData.ts`
 
-Nova função exportada no final do arquivo:
+Renomear `generateConsolidatedCSV` para `generateConsolidatedExcel` e alterar o retorno de `string` (CSV) para `ArrayBuffer` (Excel):
 
-```typescript
-export function normalizeSectorForComparison(name: string): string {
-  let n = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")  // remove acentos
-    .replace(/[_\s]+/g, " ")
-    .trim();
+- Montar o array de dados consolidados (mesma logica atual: remover altas, atualizar setores, adicionar admissoes)
+- Usar `XLSX.utils.json_to_sheet` para criar a planilha
+- Usar `XLSX.write` com `bookType: 'xlsx'` para gerar o buffer
+- Retornar o `ArrayBuffer`
 
-  // Converter algarismos romanos finais para arábicos
-  const romanMap: Record<string, string> = {
-    'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5',
-    'vi': '6', 'vii': '7', 'viii': '8', 'ix': '9', 'x': '10',
-  };
+### 2. `src/pages/Index.tsx`
 
-  const parts = n.split(' ');
-  const last = parts[parts.length - 1];
-  if (romanMap[last]) {
-    parts[parts.length - 1] = romanMap[last];
-    n = parts.join(' ');
-  }
+Atualizar `handleExport`:
 
-  return n;
-}
-```
+- Importar a funcao renomeada `generateConsolidatedExcel`
+- Criar o `Blob` com tipo `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- Nome do arquivo: `Censo_Consolidado.xlsx`
 
-Exemplos de resultado:
-- `"Clínica Médica I"` --> `"clinica medica 1"`
-- `"Clínica Médica 1"` --> `"clinica medica 1"`
-- `"Clínica Médica II"` --> `"clinica medica 2"`
-- `"Cínica Médica 2"` --> `"cinica medica 2"` (typo do usuário preservado, mas o numeral bate)
+### 3. `src/components/CleaningReportPanel.tsx`
 
-### 2. `src/lib/compareData.ts` — usar normalização na comparação de setores
+Converter `downloadCleanCSV` para `downloadCleanExcel`:
 
-Linha 20 atual:
-```typescript
-if (manPatient && manPatient.sector.toLowerCase() !== offPatient.sector.toLowerCase()) {
-```
-
-Substituir por:
-```typescript
-if (manPatient && normalizeSectorForComparison(manPatient.sector) !== normalizeSectorForComparison(offPatient.sector)) {
-```
-
-Adicionar o import no topo do arquivo.
+- Importar `XLSX` (ja disponivel)
+- Montar array de objetos `{Prontuario, Nome, Idade, Setor}`
+- Usar `XLSX.utils.json_to_sheet` + `XLSX.utils.book_new` + `XLSX.write`
+- Gerar Blob com tipo Excel e baixar como `Dados_Limpos_Oficial.xlsx`
 
 ---
 
-## O que NAO muda
+## Detalhes tecnicos
 
-- `parseOfficial.ts` — continua gerando "Clínica Médica I" (romano) normalmente
-- `parseManual.ts` — continua lendo o setor como o usuário digitou
-- `ResultCards.tsx` — exibe os nomes originais (não normalizados) para o usuário
-- A normalização é aplicada **somente na comparação**, preservando os nomes legíveis na interface
+Padrao de geracao do arquivo Excel (aplicado nos dois pontos):
 
+```typescript
+import * as XLSX from 'xlsx';
+
+const ws = XLSX.utils.json_to_sheet(data);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+const blob = new Blob([buf], {
+  type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+});
+```
+
+Nenhuma logica de comparacao ou limpeza muda -- apenas o formato de saida.
