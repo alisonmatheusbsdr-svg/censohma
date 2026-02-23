@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import type { Patient, ComparisonResult, DataAlert } from './types';
 import { normalizeSectorForComparison } from './cleanData';
 
@@ -104,19 +104,72 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
 
   consolidated.push(...result.admissions);
 
-  const data = consolidated.map(p => ({
-    'Status': admissionIds.has(p.prontuario) ? 'Admissão' : 'Mantido',
-    'Prontuário': p.prontuario,
-    'Nome': p.name,
-    'Idade': p.age ?? '',
-    ' ': '',
-    'Setor': p.sector,
-    'Mudança de Setor': oldSectorMap.has(p.prontuario)
+  const headers = ['Status', 'Prontuário', 'Nome', 'Idade', ' ', 'Setor', 'Mudança de Setor'];
+
+  const rows = consolidated.map(p => [
+    admissionIds.has(p.prontuario) ? 'Admissão' : 'Mantido',
+    p.prontuario,
+    p.name,
+    p.age ?? '',
+    '',
+    p.sector,
+    oldSectorMap.has(p.prontuario)
       ? `${oldSectorMap.get(p.prontuario)} → ${p.sector}`
       : '',
-  }));
+  ]);
 
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+  // ── Styles ────────────────────────────────────────────────────────────────
+  const headerStyle = {
+    font: { bold: true, color: { rgb: '000000' } },
+    fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFC000' } },
+    alignment: { horizontal: 'center' as const },
+  };
+
+  const admissionStyle = {
+    fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFE0B2' } },
+  };
+
+  const transferCellStyle = {
+    fill: { patternType: 'solid' as const, fgColor: { rgb: 'C6EFCE' } },
+  };
+
+  const colCount = headers.length;
+  const rowCount = rows.length + 1; // +1 for header
+
+  // Apply header styles (row 0)
+  for (let c = 0; c < colCount; c++) {
+    const addr = XLSX.utils.encode_cell({ r: 0, c });
+    if (ws[addr]) ws[addr].s = headerStyle;
+  }
+
+  // Apply row styles
+  for (let r = 1; r < rowCount; r++) {
+    const isAdmission = rows[r - 1][0] === 'Admissão';
+    const hasTransfer = String(rows[r - 1][6]).length > 0;
+
+    for (let c = 0; c < colCount; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (!ws[addr]) continue;
+
+      if (c === 6 && hasTransfer) {
+        ws[addr].s = transferCellStyle;
+      } else if (isAdmission) {
+        ws[addr].s = admissionStyle;
+      }
+    }
+  }
+
+  // Auto column widths
+  ws['!cols'] = headers.map((h, i) => {
+    const maxLen = Math.max(
+      h.length,
+      ...rows.map(row => String(row[i]).length),
+    );
+    return { wch: maxLen + 2 };
+  });
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Censo');
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
