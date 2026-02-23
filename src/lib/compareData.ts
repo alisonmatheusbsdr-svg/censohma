@@ -1,4 +1,5 @@
 import type { Patient, ComparisonResult, DataAlert } from './types';
+import { normalizeSectorForComparison } from './cleanData';
 
 export function comparePatients(manual: Patient[], official: Patient[]): ComparisonResult {
   const manualMap = new Map<string, Patient>();
@@ -17,7 +18,7 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
   const transfers: ComparisonResult['transfers'] = [];
   for (const [id, offPatient] of officialMap) {
     const manPatient = manualMap.get(id);
-    if (manPatient && manPatient.sector.toLowerCase() !== offPatient.sector.toLowerCase()) {
+    if (manPatient && normalizeSectorForComparison(manPatient.sector) !== normalizeSectorForComparison(offPatient.sector)) {
       transfers.push({
         patient: offPatient,
         oldSector: manPatient.sector,
