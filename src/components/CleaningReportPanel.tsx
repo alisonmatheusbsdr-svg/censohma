@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { ChevronDown, ChevronUp, Sparkles, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { CleaningReport, CleaningIssue } from '@/lib/types';
