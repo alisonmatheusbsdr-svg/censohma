@@ -172,5 +172,48 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Censo');
+
+  // ── Aba 2: Retirar da Planilha (altas) ─────────────────────────────────
+  if (result.discharges.length > 0) {
+    const dischargeHeaders = ['Prontuário', 'Nome', 'Idade', 'Setor'];
+    const dischargeRows = result.discharges.map(p => [
+      p.prontuario, p.name, p.age ?? '', p.sector,
+    ]);
+
+    const ws2 = XLSX.utils.aoa_to_sheet([dischargeHeaders, ...dischargeRows]);
+
+    const dischargeHeaderStyle = {
+      font: { bold: true, color: { rgb: '9C0006' } },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFC7CE' } },
+      alignment: { horizontal: 'center' as const },
+    };
+
+    const dischargeRowStyle = {
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFF0F0' } },
+    };
+
+    const dColCount = dischargeHeaders.length;
+    const dRowCount = dischargeRows.length + 1;
+
+    for (let c = 0; c < dColCount; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws2[addr]) ws2[addr].s = dischargeHeaderStyle;
+    }
+
+    for (let r = 1; r < dRowCount; r++) {
+      for (let c = 0; c < dColCount; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (ws2[addr]) ws2[addr].s = dischargeRowStyle;
+      }
+    }
+
+    ws2['!cols'] = dischargeHeaders.map((h, i) => {
+      const maxLen = Math.max(h.length, ...dischargeRows.map(row => String(row[i]).length));
+      return { wch: maxLen + 2 };
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws2, 'Retirar da Planilha');
+  }
+
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }
