@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 import type { Patient, ComparisonResult, DataAlert } from './types';
 import { normalizeSectorForComparison } from './cleanData';
 
@@ -88,25 +89,27 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
   return { discharges, admissions, transfers, alerts };
 }
 
-export function generateConsolidatedCSV(manual: Patient[], result: ComparisonResult): string {
-  // Start with manual, remove discharges, add admissions
+export function generateConsolidatedExcel(manual: Patient[], result: ComparisonResult): ArrayBuffer {
   const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
   const consolidated = manual.filter(p => !dischargeIds.has(p.prontuario));
 
-  // Update sectors for transfers
   const transferMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.newSector]));
   consolidated.forEach(p => {
     const newSector = transferMap.get(p.prontuario);
     if (newSector) p.sector = newSector;
   });
 
-  // Add admissions
   consolidated.push(...result.admissions);
 
-  const header = 'Prontuário,Nome,Idade,Setor\n';
-  const rows = consolidated.map(p =>
-    `${p.prontuario},"${p.name}",${p.age ?? ''},${p.sector}`
-  ).join('\n');
+  const data = consolidated.map(p => ({
+    'Prontuário': p.prontuario,
+    'Nome': p.name,
+    'Idade': p.age ?? '',
+    'Setor': p.sector,
+  }));
 
-  return header + rows;
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Censo');
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }

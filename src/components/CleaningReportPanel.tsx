@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as XLSX from 'xlsx';
 import { ChevronDown, ChevronUp, Sparkles, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { CleaningReport, CleaningIssue } from '@/lib/types';
@@ -46,16 +47,22 @@ function SectorBar({ name, count, max }: { name: string; count: number; max: num
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
 
-function downloadCleanCSV(report: CleaningReport, patients: { prontuario: string; name: string; age: number | null; sector: string }[]) {
-  const header = 'Prontuario,Nome,Idade,Setor\n';
-  const rows = patients
-    .map((p) => `${p.prontuario},"${p.name.replace(/"/g, '""')}",${p.age ?? ''},${p.sector}`)
-    .join('\n');
-  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+function downloadCleanExcel(_report: CleaningReport, patients: { prontuario: string; name: string; age: number | null; sector: string }[]) {
+  const data = patients.map((p) => ({
+    'Prontuário': p.prontuario,
+    'Nome': p.name,
+    'Idade': p.age ?? '',
+    'Setor': p.sector,
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Dados Limpos');
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'Dados_Limpos_Oficial.csv';
+  a.download = 'Dados_Limpos_Oficial.xlsx';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -135,7 +142,7 @@ export function CleaningReportPanel({ report, patients }: Props) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => downloadCleanCSV(report, patients)}
+              onClick={() => downloadCleanExcel(report, patients)}
               className="gap-1.5 text-xs"
             >
               <Download className="h-3.5 w-3.5" />

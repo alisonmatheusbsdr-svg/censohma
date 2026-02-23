@@ -8,7 +8,7 @@ import { PreviewTable } from '@/components/PreviewTable';
 import { CleaningReportPanel } from '@/components/CleaningReportPanel';
 import { parseOfficialFile } from '@/lib/parseOfficial';
 import { applyMapping } from '@/lib/parseManual';
-import { comparePatients, generateConsolidatedCSV } from '@/lib/compareData';
+import { comparePatients, generateConsolidatedExcel } from '@/lib/compareData';
 import type { Patient, ColumnMapping, ComparisonResult, CleaningReport } from '@/lib/types';
 import { ArrowDownToLine, GitCompare, Stethoscope } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -53,12 +53,12 @@ const Index = () => {
 
   const handleExport = () => {
     if (!result) return;
-    const csv = generateConsolidatedCSV(manualPatients, result);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const buf = generateConsolidatedExcel(manualPatients, result);
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'Consolidated_Census.csv';
+    a.download = 'Censo_Consolidado.xlsx';
     a.click();
     URL.revokeObjectURL(url);
   };
