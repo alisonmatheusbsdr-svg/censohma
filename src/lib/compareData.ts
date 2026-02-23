@@ -91,6 +91,9 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
 
 export function generateConsolidatedExcel(manual: Patient[], result: ComparisonResult): ArrayBuffer {
   const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
+  const admissionIds = new Set(result.admissions.map(p => p.prontuario));
+  const oldSectorMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.oldSector]));
+
   const consolidated = manual.filter(p => !dischargeIds.has(p.prontuario));
 
   const transferMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.newSector]));
@@ -102,10 +105,15 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
   consolidated.push(...result.admissions);
 
   const data = consolidated.map(p => ({
+    'Status': admissionIds.has(p.prontuario) ? 'Admissão' : 'Mantido',
     'Prontuário': p.prontuario,
     'Nome': p.name,
     'Idade': p.age ?? '',
+    ' ': '',
     'Setor': p.sector,
+    'Mudança de Setor': oldSectorMap.has(p.prontuario)
+      ? `${oldSectorMap.get(p.prontuario)} → ${p.sector}`
+      : '',
   }));
 
   const ws = XLSX.utils.json_to_sheet(data);
