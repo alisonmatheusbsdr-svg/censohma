@@ -1,59 +1,29 @@
 
 
-# Aba separada para pacientes de Alta no Excel
+# Data e hora no nome dos arquivos exportados
 
 ## O que sera feito
 
-Adicionar uma segunda aba (sheet) no arquivo Excel exportado chamada **"Retirar da Planilha"**, contendo apenas os pacientes que receberam alta (presentes na lista manual mas ausentes no censo oficial).
+Adicionar data e hora no formato `HH-MM DD-MM-AA` ao nome dos arquivos Excel exportados. O caractere `:` e `/` nao sao permitidos em nomes de arquivo, entao serao substituidos por `-`.
 
-## Estrutura do arquivo Excel
-
-### Aba 1 — "Censo" (ja existe, sem alteracao)
-Mantidos e Admissoes com a formatacao atual.
-
-### Aba 2 — "Retirar da Planilha" (nova)
-| Prontuario | Nome | Idade | Setor |
-
-- Cabecalhos com fundo vermelho claro (`FFC7CE`) e fonte em negrito
-- Linhas com fundo rosa claro (`FFF0F0`) para reforcar visualmente que sao pacientes a remover
+Formato final: `Censo_Consolidado 14-30 23-02-26.xlsx`
 
 ## Arquivo a modificar
 
-### `src/lib/compareData.ts` — funcao `generateConsolidatedExcel`
+### `src/pages/Index.tsx` — funcao `handleExport`
 
-Apos criar a aba "Censo" (codigo existente), adicionar:
-
-1. Montar os dados das altas a partir de `result.discharges`
-2. Criar uma segunda worksheet com `XLSX.utils.aoa_to_sheet`
-3. Aplicar estilos de cabecalho (vermelho) e linhas (rosa claro)
-4. Aplicar largura automatica das colunas
-5. Adicionar ao workbook com `XLSX.utils.book_append_sheet(wb, ws2, 'Retirar da Planilha')`
-
-### Logica resumida
+Gerar uma string com data/hora atual usando `new Date()` e concatenar ao nome do arquivo:
 
 ```text
-// Dados da aba de altas
-const dischargeHeaders = ['Prontuário', 'Nome', 'Idade', 'Setor'];
-const dischargeRows = result.discharges.map(p => [
-  p.prontuario, p.name, p.age ?? '', p.sector
-]);
+const now = new Date();
+const hh = String(now.getHours()).padStart(2, '0');
+const mm = String(now.getMinutes()).padStart(2, '0');
+const dd = String(now.getDate()).padStart(2, '0');
+const mo = String(now.getMonth() + 1).padStart(2, '0');
+const yy = String(now.getFullYear()).slice(-2);
 
-const ws2 = XLSX.utils.aoa_to_sheet([dischargeHeaders, ...dischargeRows]);
-
-// Estilo cabecalho vermelho
-dischargeHeaderStyle = {
-  font: { bold: true, color: { rgb: "9C0006" } },
-  fill: { patternType: "solid", fgColor: { rgb: "FFC7CE" } },
-  alignment: { horizontal: "center" }
-}
-
-// Estilo linhas rosa claro
-dischargeRowStyle = {
-  fill: { patternType: "solid", fgColor: { rgb: "FFF0F0" } }
-}
-
-XLSX.utils.book_append_sheet(wb, ws2, 'Retirar da Planilha');
+a.download = `Censo_Consolidado ${hh}-${mm} ${dd}-${mo}-${yy}.xlsx`;
 ```
 
-Nenhum outro arquivo muda. A aba "Censo" permanece identica.
+Nenhum outro arquivo muda.
 
