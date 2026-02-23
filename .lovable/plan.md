@@ -1,91 +1,59 @@
 
 
-# Formatacao Visual do Excel Exportado
+# Aba separada para pacientes de Alta no Excel
 
 ## O que sera feito
 
-Substituir o pacote `xlsx` pelo `xlsx-js-style` (fork compativel com mesma API, mesma versao 0.18.5) para adicionar estilos as celulas do Excel exportado.
+Adicionar uma segunda aba (sheet) no arquivo Excel exportado chamada **"Retirar da Planilha"**, contendo apenas os pacientes que receberam alta (presentes na lista manual mas ausentes no censo oficial).
 
-## Estilos baseados na imagem de referencia
+## Estrutura do arquivo Excel
 
-### Cabecalhos (linha 1)
-- Fundo amarelo dourado (`FFC000`)
-- Fonte em negrito
-- Alinhamento centralizado
+### Aba 1 — "Censo" (ja existe, sem alteracao)
+Mantidos e Admissoes com a formatacao atual.
 
-### Linhas de "Mantido"
-- Fundo branco (sem preenchimento especial)
+### Aba 2 — "Retirar da Planilha" (nova)
+| Prontuario | Nome | Idade | Setor |
 
-### Linhas de "Admissao"
-- Fundo laranja claro (`FFF2CC` ou `FFE0B2`) para toda a linha
-- Texto "ADM" na coluna Status (ou "Admissao", como ja esta)
+- Cabecalhos com fundo vermelho claro (`FFC7CE`) e fonte em negrito
+- Linhas com fundo rosa claro (`FFF0F0`) para reforcar visualmente que sao pacientes a remover
 
-### Coluna "Mudanca de Setor"
-- Quando preenchida, destaque com fundo verde claro (`C6EFCE`) para indicar transferencia
+## Arquivo a modificar
 
-### Largura automatica das colunas
-- Calcular a largura maxima do conteudo de cada coluna e aplicar via `ws['!cols']`
+### `src/lib/compareData.ts` — funcao `generateConsolidatedExcel`
 
----
+Apos criar a aba "Censo" (codigo existente), adicionar:
 
-## Dependencia
+1. Montar os dados das altas a partir de `result.discharges`
+2. Criar uma segunda worksheet com `XLSX.utils.aoa_to_sheet`
+3. Aplicar estilos de cabecalho (vermelho) e linhas (rosa claro)
+4. Aplicar largura automatica das colunas
+5. Adicionar ao workbook com `XLSX.utils.book_append_sheet(wb, ws2, 'Retirar da Planilha')`
 
-### Substituir `xlsx` por `xlsx-js-style`
-
-- Remover `xlsx` do `package.json`
-- Adicionar `xlsx-js-style`
-- A API e identica (`import * as XLSX from 'xlsx-js-style'`), entao todos os imports existentes (`parseOfficial.ts`, `CleaningReportPanel.tsx`) precisam atualizar o import de `'xlsx'` para `'xlsx-js-style'`
-
-## Arquivos a modificar
-
-### 1. `package.json`
-- Trocar `"xlsx": "^0.18.5"` por `"xlsx-js-style": "^1.2.0"`
-
-### 2. `src/lib/compareData.ts`
-- Alterar import para `import * as XLSX from 'xlsx-js-style'`
-- Apos criar a worksheet, iterar pelas celulas para aplicar estilos:
-  - Linha 0 (cabecalho): fundo amarelo + negrito
-  - Linhas de admissao: fundo laranja
-  - Celulas com mudanca de setor: fundo verde claro
-- Calcular e aplicar `ws['!cols']` com larguras automaticas baseadas no conteudo
-
-### 3. `src/lib/parseOfficial.ts`
-- Alterar import de `'xlsx'` para `'xlsx-js-style'`
-
-### 4. `src/components/CleaningReportPanel.tsx`
-- Alterar import de `'xlsx'` para `'xlsx-js-style'`
-
----
-
-## Detalhes tecnicos da estilizacao
+### Logica resumida
 
 ```text
-// Estilo do cabecalho
-headerStyle = {
-  font: { bold: true, color: { rgb: "000000" } },
-  fill: { patternType: "solid", fgColor: { rgb: "FFC000" } },
+// Dados da aba de altas
+const dischargeHeaders = ['Prontuário', 'Nome', 'Idade', 'Setor'];
+const dischargeRows = result.discharges.map(p => [
+  p.prontuario, p.name, p.age ?? '', p.sector
+]);
+
+const ws2 = XLSX.utils.aoa_to_sheet([dischargeHeaders, ...dischargeRows]);
+
+// Estilo cabecalho vermelho
+dischargeHeaderStyle = {
+  font: { bold: true, color: { rgb: "9C0006" } },
+  fill: { patternType: "solid", fgColor: { rgb: "FFC7CE" } },
   alignment: { horizontal: "center" }
 }
 
-// Estilo da linha de admissao
-admissionStyle = {
-  fill: { patternType: "solid", fgColor: { rgb: "FFE0B2" } }
+// Estilo linhas rosa claro
+dischargeRowStyle = {
+  fill: { patternType: "solid", fgColor: { rgb: "FFF0F0" } }
 }
 
-// Estilo da celula de mudanca de setor
-transferStyle = {
-  fill: { patternType: "solid", fgColor: { rgb: "C6EFCE" } }
-}
-
-// Largura automatica
-ws['!cols'] = headers.map((_, colIdx) => {
-  const maxLen = Math.max(
-    headerLen,
-    ...dataRows.map(row => String(row[colIdx]).length)
-  );
-  return { wch: maxLen + 2 };
-});
+XLSX.utils.book_append_sheet(wb, ws2, 'Retirar da Planilha');
 ```
 
-A logica de comparacao, limpeza e interface nao muda -- apenas o formato visual do arquivo exportado.
+Nenhum outro arquivo muda. A aba "Censo" permanece identica.
 
