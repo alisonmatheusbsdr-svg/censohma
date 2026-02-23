@@ -210,3 +210,28 @@ export function addIssue(
     issues.push({ type, count: 1, examples: [example] });
   }
 }
+
+// ─── Sector normalization for comparison ──────────────────────────────────────
+
+export function normalizeSectorForComparison(name: string): string {
+  let n = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_\s]+/g, ' ')
+    .trim();
+
+  const romanMap: Record<string, string> = {
+    'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5',
+    'vi': '6', 'vii': '7', 'viii': '8', 'ix': '9', 'x': '10',
+  };
+
+  const parts = n.split(' ');
+  const last = parts[parts.length - 1];
+  if (romanMap[last]) {
+    parts[parts.length - 1] = romanMap[last];
+    n = parts.join(' ');
+  }
+
+  return n;
+}
