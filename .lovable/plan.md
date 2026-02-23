@@ -1,120 +1,75 @@
 
-# Plano: Reformulação dos Resultados da Comparação
 
-## O que muda e por quê
+# Correção: Normalização de Nomes de Setor (Roman vs. Arábico)
 
-Atualmente os 4 cards de resultado ficam num grid 2×2 com scroll interno limitado a `max-h-60` (≈240px). Com listas longas, o usuário não consegue ver todos os registros confortavelmente.
+## Problema
 
-A proposta substitui o grid de cards por um layout de **abas (Tabs)** com painel de scroll generoso, além de renomear as categorias para a terminologia solicitada.
+A planilha manual usa "Clínica Médica 1" (número arábico) e o censo oficial retorna "Clínica Médica I" (número romano, vindo do `SECTOR_MAP`). Na comparação de setores em `compareData.ts`, o `.toLowerCase()` não resolve essa diferença, gerando falsas transferências.
 
----
+## Solução
 
-## Nova terminologia das 4 categorias
-
-| Antes | Depois | Lógica (não muda) |
-|---|---|---|
-| Saídas / Altas | Retirar da Planilha | Está no manual, não está no censo oficial |
-| Admissões | Admissões | Está no censo oficial, não está no manual |
-| Transferências | Mudança de Setor | Mesmo prontuário, setor diferente entre manual e oficial |
-| Alerta de Dados | Alerta de Dados | Duplicatas, homônimos, divergência de idade |
-
----
-
-## Nova estrutura visual — Tabs com lista rolável
-
-```text
-┌──────────────────────────────────────────────────────────────────┐
-│  Retirar da Planilha (12) │ Admissões (5) │ Mudança de Setor (3) │ Alertas (2) │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ● JOAO PAULO DE ALBUQUERQUE SILVA            #859419            │
-│    Clínica Médica I                                              │
-│  ─────────────────────────────────────────────────────────       │
-│  ● MARIA ROSA DE LIMA                         #1044478           │
-│    Clínica Médica I                                              │
-│  ─────────────────────────────────────────────────────────       │
-│  ... (scroll)                                                    │
-│                                                                  │
-│                                                          h-96    │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-Cada aba exibe:
-- **Contador** no badge da própria aba (sempre visível)
-- **Lista com scroll** de altura fixa `h-96` (≈384px — o dobro do atual)
-- **Informações completas** por paciente: nome, prontuário, setor
-- Para **Mudança de Setor**: mostra `Setor Anterior → Setor Novo` com ícone de seta
-- Para **Alertas**: mostra o tipo do alerta com badge colorido + lista de pacientes envolvidos
-- Mensagem vazia estilizada quando não há registros na categoria
-
----
-
-## Detalhamento visual de cada aba
-
-### Aba 1 — Retirar da Planilha
-```text
-[ícone vermelho] Paciente está no manual mas não aparece no censo oficial.
-                 Pode ter recebido alta ou transferência externa.
-
-• JOAO PAULO...           #859419 • Clínica Médica I
-• MARIA ROSA DE LIMA      #1044478 • Clínica Médica I
-```
-
-### Aba 2 — Admissões
-```text
-[ícone verde] Paciente aparece no censo oficial mas não está no manual.
-              Deve ser incluído na planilha.
-
-• ADEILDO DA SILVA        #1051245 • Clínica Médica II
-```
-
-### Aba 3 — Mudança de Setor
-```text
-[ícone laranja] Mesmo prontuário encontrado em setores diferentes.
-                Atualizar o setor na planilha manual.
-
-• DIELSON ELIAS DOS SANTOS    #1051245
-  Clínica Médica I  →  Clínica Médica II
-```
-
-### Aba 4 — Alertas de Dados
-```text
-[badge: DUPLICADO] Prontuário 859419 duplicado na lista Manual (2x)
-  → JOAO PAULO... #859419 | JOAO PAULO... #859419
-
-[badge: HOMÔNIMO] "MARIA JOSE" com prontuários diferentes
-  → MARIA JOSE #123 | MARIA JOSE #456
-```
+Criar uma função `normalizeSectorName` em `src/lib/cleanData.ts` e usá-la em `src/lib/compareData.ts` na comparação de setores.
 
 ---
 
 ## Arquivos a modificar
 
-### `src/components/ResultCards.tsx` — reescrever completamente
+### 1. `src/lib/cleanData.ts` — adicionar função de normalização
 
-Substituir o grid de 4 cards independentes por um único componente `Tabs` do Radix UI (já disponível no projeto via `@radix-ui/react-tabs`):
+Nova função exportada no final do arquivo:
 
-- Importar `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` de `@/components/ui/tabs`
-- 4 triggers, cada um com ícone + label + badge de contagem
-- Dentro de cada `TabsContent`: `ScrollArea` com altura `h-96`
-- Cores dos triggers por categoria:
-  - Retirar da Planilha: badge vermelho (`destructive`)
-  - Admissões: badge verde (`success`)
-  - Mudança de Setor: badge laranja (`warning`)
-  - Alertas: badge amarelo (`warning`)
-- Default tab: a que tiver mais registros (ou `retirar` por padrão)
+```typescript
+export function normalizeSectorForComparison(name: string): string {
+  let n = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")  // remove acentos
+    .replace(/[_\s]+/g, " ")
+    .trim();
 
-### Nenhum outro arquivo muda
+  // Converter algarismos romanos finais para arábicos
+  const romanMap: Record<string, string> = {
+    'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5',
+    'vi': '6', 'vii': '7', 'viii': '8', 'ix': '9', 'x': '10',
+  };
 
-- `compareData.ts` — lógica de comparação está correta, não muda
-- `types.ts` — tipos `ComparisonResult` estão corretos, não mudam
-- `Index.tsx` — já passa `result` para `ResultCards`, não muda
-- `KPICards.tsx` — não muda
+  const parts = n.split(' ');
+  const last = parts[parts.length - 1];
+  if (romanMap[last]) {
+    parts[parts.length - 1] = romanMap[last];
+    n = parts.join(' ');
+  }
+
+  return n;
+}
+```
+
+Exemplos de resultado:
+- `"Clínica Médica I"` --> `"clinica medica 1"`
+- `"Clínica Médica 1"` --> `"clinica medica 1"`
+- `"Clínica Médica II"` --> `"clinica medica 2"`
+- `"Cínica Médica 2"` --> `"cinica medica 2"` (typo do usuário preservado, mas o numeral bate)
+
+### 2. `src/lib/compareData.ts` — usar normalização na comparação de setores
+
+Linha 20 atual:
+```typescript
+if (manPatient && manPatient.sector.toLowerCase() !== offPatient.sector.toLowerCase()) {
+```
+
+Substituir por:
+```typescript
+if (manPatient && normalizeSectorForComparison(manPatient.sector) !== normalizeSectorForComparison(offPatient.sector)) {
+```
+
+Adicionar o import no topo do arquivo.
 
 ---
 
-## Sequência de implementação
+## O que NAO muda
 
-1. Reescrever `src/components/ResultCards.tsx` com a estrutura de Tabs
-2. Ajustar labels, ícones e cores de cada aba
-3. Garantir que o scroll funciona corretamente dentro de cada TabsContent
+- `parseOfficial.ts` — continua gerando "Clínica Médica I" (romano) normalmente
+- `parseManual.ts` — continua lendo o setor como o usuário digitou
+- `ResultCards.tsx` — exibe os nomes originais (não normalizados) para o usuário
+- A normalização é aplicada **somente na comparação**, preservando os nomes legíveis na interface
+
