@@ -1,80 +1,67 @@
 
 
-# Aba "Censo Consolidado" na visualizacao de resultados
+# Reestruturacao da pagina principal
 
-## O que sera feito
+## Objetivo
 
-Adicionar uma nova aba **"Censo Consolidado"** como primeira aba nos resultados, mostrando a visao unificada de todos os pacientes com indicacao visual de status. Esta aba sera a aba padrao (aberta por padrao apos a comparacao).
+Simplificar o layout removendo elementos redundantes e colocando os resultados da comparacao em destaque, logo apos a area de entrada de dados.
 
-## Logica de montagem da lista
+## O que muda
 
-1. Manter a **ordem dos pacientes da lista manual** (texto colado pelo usuario)
-2. Pacientes **mantidos**: fundo branco, sem destaque
-3. Pacientes para **retirar** (alta): fundo vermelho claro, texto tachado (line-through)
-4. Pacientes de **admissao**: adicionados ao **final** da lista, fundo laranja
-5. Pacientes com **mudanca de setor**: mostrar setor atualizado (do oficial)
+### `src/pages/Index.tsx`
 
-## Layout da aba (formato tabela)
+**Remover:**
+1. **Preview Tables** (linhas 111-117) — os dados ja aparecem no Censo Consolidado apos a comparacao, tornando o preview redundante
+2. **CleaningReportPanel** visivel por padrao (linhas 106-109) — mover para dentro de um Collapsible discreto dentro do componente FileUpload, ou remover da pagina principal
+
+**Reorganizar a ordem dos elementos:**
 
 ```text
-Prontuario | Nome                    | Idade | Setor           | Status
-123456     | Jose Maria da Silva     | 70    | Clinica Medica 1| Mantido
-632145     | Maria Jose da Silva     | 84    | Clinica Medica 2| Retirar    ← fundo rosa, texto tachado
-854796     | Aline Dantas Barreto    | 70    | Clinica Medica 2| Admissao   ← fundo laranja
+1. Header (manter)
+2. Area de entrada (FileUpload + ManualPaste) — manter lado a lado
+3. Botoes (Comparar + Exportar) — mover para logo abaixo da entrada
+4. KPI Cards — mover para depois dos botoes, so aparecer quando houver resultado
+5. ResultCards (abas: Consolidado, Retirar, Admissoes, etc.) — destaque principal
 ```
 
-## Arquivos a modificar
+**Detalhes:**
+- KPI Cards so renderizam quando `result` existe (evita mostrar zeros sem contexto)
+- Cleaning Report fica como um pequeno texto/link colapsavel abaixo do FileUpload (ex: "429 linhas processadas, 238 vazias removidas — ver detalhes"), sem ocupar espaco vertical
+- Botao "Comparar Dados" fica centralizado logo apos os inputs
+- ResultCards ocupa toda a largura e fica como elemento principal da pagina
 
-### 1. `src/components/ResultCards.tsx`
+### `src/components/CleaningReportPanel.tsx`
 
-- Adicionar nova aba "Censo Consolidado" como primeira TabsTrigger com icone `ClipboardList` e badge com total de pacientes
-- Definir `defaultValue="consolidado"` (sempre abrir nesta aba)
-- Novo TabsContent que recebe `manualPatients` e `result`
-- Montar a lista consolidada com `useMemo`:
-  - Comecar com todos os pacientes manuais na ordem original
-  - Para cada um, determinar status: se esta em `dischargeIds` → "Retirar", se esta em `transferMap` → atualizar setor, senao → "Mantido"
-  - Ao final, adicionar admissoes com status "Admissao"
-- Renderizar como tabela (Table component do shadcn) com colunas: Prontuario, Nome, Idade, Setor, Status
-- Estilos por linha:
-  - Retirar: `bg-red-50 line-through text-muted-foreground`
-  - Admissao: `bg-orange-50`
-  - Mantido: sem classe extra
-- Badge de status com cores correspondentes
+Transformar em um resumo compacto inline (uma linha com numeros-chave) com um Collapsible para ver detalhes, em vez de um painel grande separado.
 
-### 2. `src/pages/Index.tsx`
+### Componentes removidos da pagina:
+- `PreviewTable` — nao sera mais renderizado na Index (o componente continua existindo no projeto)
 
-- Passar `manualPatients` como prop adicional para `ResultCards`
+## Layout final
 
-### Detalhes tecnicos
-
-O componente `ResultCards` passara a receber:
 ```text
-interface ResultCardsProps {
-  result: ComparisonResult;
-  manualPatients: Patient[];
-}
+┌─────────────────────────────────────────────┐
+│ Header: HMA Census Manager                 │
+├─────────────────────────────────────────────┤
+│ [FileUpload]          │ [ManualPaste]       │
+│  ↳ "97 pac. • 238     │                     │
+│    vazias removidas"  │                     │
+├─────────────────────────────────────────────┤
+│     [Comparar Dados]  [Exportar Censo]      │
+├─────────────────────────────────────────────┤
+│ KPI: Total 97 │ Altas 18 │ Adm 4 │ Transf 2│  ← so com resultado
+├─────────────────────────────────────────────┤
+│ Tabs: Consolidado | Retirar | Admissoes ... │
+│ ┌─────────────────────────────────────────┐ │
+│ │ Tabela principal do censo consolidado   │ │
+│ │ (altura generosa, scroll interno)       │ │
+│ └─────────────────────────────────────────┘ │
+└─────────────────────────────────────────────┘
 ```
 
-A lista consolidada sera computada com `useMemo` dentro do componente:
-```text
-const consolidatedList = useMemo(() => {
-  const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
-  const admissionIds = new Set(result.admissions.map(p => p.prontuario));
-  const transferMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.newSector]));
+## Arquivos modificados
 
-  const list = manualPatients.map(p => ({
-    ...p,
-    sector: transferMap.get(p.prontuario) ?? p.sector,
-    status: dischargeIds.has(p.prontuario) ? 'retirar' : 'mantido',
-  }));
-
-  result.admissions.forEach(p => {
-    list.push({ ...p, status: 'admissao' });
-  });
-
-  return list;
-}, [manualPatients, result]);
-```
-
-Nenhum outro arquivo muda.
+1. `src/pages/Index.tsx` — reorganizar ordem, remover PreviewTable e CleaningReportPanel standalone
+2. `src/components/FileUpload.tsx` — adicionar resumo compacto do cleaning report como prop opcional (contagem inline)
+3. `src/components/CleaningReportPanel.tsx` — criar versao compacta (uma linha + collapsible)
 
