@@ -131,7 +131,7 @@ const Index = () => {
         </div>
 
         {/* Results */}
-        {result && <ResultCards result={result} />}
+        {result && <ResultCards result={result} manualPatients={manualPatients} />}
       </main>
     </div>
   );
