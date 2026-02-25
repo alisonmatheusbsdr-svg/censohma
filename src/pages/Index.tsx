@@ -8,8 +8,9 @@ import { parseOfficialFile } from '@/lib/parseOfficial';
 import { applyMapping } from '@/lib/parseManual';
 import { comparePatients, generateConsolidatedExcel } from '@/lib/compareData';
 import type { Patient, ColumnMapping, ComparisonResult, CleaningReport } from '@/lib/types';
-import { ArrowDownToLine, GitCompare, Stethoscope } from 'lucide-react';
+import { ArrowDownToLine, GitCompare, Stethoscope, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const Index = () => {
   const { toast } = useToast();
@@ -115,6 +116,17 @@ const Index = () => {
             admissions={result.admissions.length}
             transfers={result.transfers.length}
           />
+        )}
+
+        {/* Alert — verify surgical patients */}
+        {result && (
+          <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <AlertTitle className="text-amber-800 dark:text-amber-300">Verifique os pacientes cirúrgicos</AlertTitle>
+            <AlertDescription className="text-amber-700 dark:text-amber-400/80">
+              Alguns pacientes de clínicas cirúrgicas podem estar ocupando leitos na sala da clínica médica. Confirme se todos os pacientes listados no censo consolidado estão realmente sob avaliação da clínica médica.
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Results */}
