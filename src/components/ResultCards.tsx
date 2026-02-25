@@ -3,8 +3,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { TrendingDown, TrendingUp, ArrowRightLeft, AlertTriangle, ArrowRight } from 'lucide-react';
-import type { ComparisonResult } from '@/lib/types';
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
+import { TrendingDown, TrendingUp, ArrowRightLeft, AlertTriangle, ArrowRight, ClipboardList } from 'lucide-react';
+import type { ComparisonResult, Patient } from '@/lib/types';
+
+interface ResultCardsProps {
+  result: ComparisonResult;
+  manualPatients: Patient[];
+}
 
 function patientLabel(name: string, age: number | null) {
   return age !== null ? `${name} (${age}a)` : name;
@@ -22,20 +28,40 @@ const ALERT_TYPE_COLOR: Record<string, string> = {
   age_mismatch: 'bg-transfer text-transfer-foreground',
 };
 
-export function ResultCards({ result }: { result: ComparisonResult }) {
-  const defaultTab = useMemo(() => {
-    const counts = {
-      retirar: result.discharges.length,
-      admissoes: result.admissions.length,
-      setor: result.transfers.length,
-      alertas: result.alerts.length,
-    };
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-  }, [result]);
+type ConsolidatedPatient = Patient & { status: 'mantido' | 'retirar' | 'admissao' };
+
+export function ResultCards({ result, manualPatients }: ResultCardsProps) {
+  const consolidatedList = useMemo<ConsolidatedPatient[]>(() => {
+    const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
+    const transferMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.newSector]));
+
+    const list: ConsolidatedPatient[] = manualPatients.map(p => ({
+      ...p,
+      sector: transferMap.get(p.prontuario) ?? p.sector,
+      status: dischargeIds.has(p.prontuario) ? 'retirar' as const : 'mantido' as const,
+    }));
+
+    result.admissions.forEach(p => {
+      list.push({ ...p, status: 'admissao' as const });
+    });
+
+    return list;
+  }, [manualPatients, result]);
 
   return (
-    <Tabs defaultValue={defaultTab} className="w-full">
+    <Tabs defaultValue="consolidado" className="w-full">
       <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1 mb-1">
+        {/* Censo Consolidado */}
+        <TabsTrigger
+          value="consolidado"
+          className="flex items-center gap-1.5 data-[state=active]:bg-background"
+        >
+          <ClipboardList className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs font-medium">Censo Consolidado</span>
+          <Badge className="ml-0.5 h-4 px-1.5 text-[10px] bg-primary text-primary-foreground">
+            {consolidatedList.filter(p => p.status !== 'retirar').length}
+          </Badge>
+        </TabsTrigger>
         {/* Retirar da Planilha */}
         <TabsTrigger
           value="retirar"
@@ -84,6 +110,72 @@ export function ResultCards({ result }: { result: ComparisonResult }) {
           </Badge>
         </TabsTrigger>
       </TabsList>
+
+      {/* ── Censo Consolidado ───────────────────────────────── */}
+      <TabsContent value="consolidado" className="mt-0">
+        <div className="rounded-md border border-primary/30 bg-card">
+          <div className="px-4 py-2.5 border-b border-primary/20 bg-primary/5">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold text-primary">Visão consolidada do censo.</span>{' '}
+              Mantém a ordem da planilha manual. Admissões aparecem ao final.
+            </p>
+          </div>
+          <ScrollArea className="h-[32rem]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-24 text-xs">Prontuário</TableHead>
+                  <TableHead className="text-xs">Nome</TableHead>
+                  <TableHead className="w-16 text-xs text-center">Idade</TableHead>
+                  <TableHead className="text-xs">Setor</TableHead>
+                  <TableHead className="w-24 text-xs text-center">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {consolidatedList.map((p, i) => {
+                  const rowClass =
+                    p.status === 'retirar'
+                      ? 'bg-destructive/10'
+                      : p.status === 'admissao'
+                        ? 'bg-warning/10'
+                        : '';
+                  const textClass = p.status === 'retirar' ? 'line-through text-muted-foreground' : '';
+                  return (
+                    <TableRow key={`${p.prontuario}-${i}`} className={rowClass}>
+                      <TableCell className={`font-mono text-xs ${textClass}`}>
+                        {p.prontuario}
+                      </TableCell>
+                      <TableCell className={`text-sm font-medium ${textClass}`}>
+                        {p.name}
+                      </TableCell>
+                      <TableCell className={`text-xs text-center ${textClass}`}>
+                        {p.age ?? '—'}
+                      </TableCell>
+                      <TableCell className={`text-xs ${textClass}`}>
+                        {p.sector}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-bold ${
+                            p.status === 'retirar'
+                              ? 'border-destructive/50 text-destructive bg-destructive/10'
+                              : p.status === 'admissao'
+                                ? 'border-warning/50 text-warning bg-warning/10'
+                                : 'border-success/50 text-success bg-success/10'
+                          }`}
+                        >
+                          {p.status === 'retirar' ? 'Retirar' : p.status === 'admissao' ? 'Admissão' : 'Mantido'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </div>
+      </TabsContent>
 
       {/* ── Retirar da Planilha ─────────────────────────────── */}
       <TabsContent value="retirar" className="mt-0">
