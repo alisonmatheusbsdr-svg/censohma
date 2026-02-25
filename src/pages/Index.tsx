@@ -4,8 +4,6 @@ import { KPICards } from '@/components/KPICards';
 import { FileUpload } from '@/components/FileUpload';
 import { ManualPaste } from '@/components/ManualPaste';
 import { ResultCards } from '@/components/ResultCards';
-import { PreviewTable } from '@/components/PreviewTable';
-import { CleaningReportPanel } from '@/components/CleaningReportPanel';
 import { parseOfficialFile } from '@/lib/parseOfficial';
 import { applyMapping } from '@/lib/parseManual';
 import { comparePatients, generateConsolidatedExcel } from '@/lib/compareData';
@@ -89,32 +87,11 @@ const Index = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* KPIs */}
-        <KPICards
-          totalCensus={totalCensus}
-          discharges={result?.discharges.length ?? 0}
-          admissions={result?.admissions.length ?? 0}
-          transfers={result?.transfers.length ?? 0}
-        />
-
         {/* Input Area */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FileUpload onFileLoaded={handleOfficialFile} />
+          <FileUpload onFileLoaded={handleOfficialFile} cleaningReport={cleaningReport} />
           <ManualPaste onParsed={handleManualParsed} />
         </div>
-
-        {/* Cleaning Report */}
-        {cleaningReport && (
-          <CleaningReportPanel report={cleaningReport} patients={officialPatients} />
-        )}
-
-        {/* Preview Tables */}
-        {(officialPatients.length > 0 || manualPatients.length > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <PreviewTable patients={officialPatients} title="Preview — Arquivo Oficial" />
-            <PreviewTable patients={manualPatients} title="Preview — Lista Manual" />
-          </div>
-        )}
 
         {/* Compare Button */}
         <div className="flex justify-center gap-3">
@@ -129,6 +106,16 @@ const Index = () => {
             </Button>
           )}
         </div>
+
+        {/* KPIs — only after comparison */}
+        {result && (
+          <KPICards
+            totalCensus={totalCensus}
+            discharges={result.discharges.length}
+            admissions={result.admissions.length}
+            transfers={result.transfers.length}
+          />
+        )}
 
         {/* Results */}
         {result && <ResultCards result={result} manualPatients={manualPatients} />}
