@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ClipboardPaste, AlertTriangle, Sheet, Loader2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { ClipboardPaste, AlertTriangle, Sheet, Loader2, RefreshCw } from 'lucide-react';
 import { parseManualText, detectColumns } from '@/lib/parseManual';
 import type { ColumnMapping } from '@/lib/types';
 
@@ -25,6 +26,9 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
   const [sheetName, setSheetName] = useState('');
   const [loading, setLoading] = useState(false);
   const [sheetError, setSheetError] = useState('');
+  const [autoSync, setAutoSync] = useState(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const syncingRef = useRef(false);
 
   const processRows = (parsed: string[][]) => {
     const { mapping: detected, confidence, hasHeader } = detectColumns(parsed);
@@ -45,19 +49,20 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
     processRows(parseManualText(value));
   };
 
-  const handleImportSheet = async () => {
+  const handleImportSheet = useCallback(async (silent = false) => {
     setSheetError('');
     const match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
     if (!match) {
-      setSheetError('Link inválido. Cole o link completo da planilha Google.');
+      if (!silent) setSheetError('Link inválido. Cole o link completo da planilha Google.');
       return;
     }
     if (!sheetName.trim()) {
-      setSheetError('Informe o nome da aba.');
+      if (!silent) setSheetError('Informe o nome da aba.');
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
+    syncingRef.current = true;
     try {
       const csvUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName.trim())}`;
       const res = await fetch(csvUrl);
@@ -65,13 +70,25 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
       const csvText = await res.text();
       if (!csvText.trim()) throw new Error('Planilha vazia');
       processRows(parseManualText(csvText));
+      setLastSync(new Date());
     } catch {
-      setSheetError('Não foi possível importar. Verifique se a planilha é pública e o nome da aba está correto.');
-      setRows(null);
+      if (!silent) {
+        setSheetError('Não foi possível importar. Verifique se a planilha é pública e o nome da aba está correto.');
+        setRows(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+      syncingRef.current = false;
     }
-  };
+  }, [sheetUrl, sheetName]);
+
+  useEffect(() => {
+    if (!autoSync || !sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)) return;
+    const interval = setInterval(() => {
+      if (!syncingRef.current) handleImportSheet(true);
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [autoSync, sheetUrl, handleImportSheet]);
 
   const colCount = rows ? Math.max(...rows.map(r => r.length)) : 0;
   const colOptions = Array.from({ length: colCount }, (_, i) => i);
@@ -172,10 +189,22 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
                 onChange={e => setSheetName(e.target.value)}
               />
             </div>
-            <Button onClick={handleImportSheet} disabled={loading} className="w-full gap-2" size="sm">
+            <Button onClick={() => handleImportSheet(false)} disabled={loading} className="w-full gap-2" size="sm">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sheet className="h-4 w-4" />}
               {loading ? 'Importando...' : 'Importar'}
             </Button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Switch id="auto-sync" checked={autoSync} onCheckedChange={setAutoSync} />
+                <Label htmlFor="auto-sync" className="text-xs cursor-pointer">Sync automático</Label>
+              </div>
+              {lastSync && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3" />
+                  {lastSync.toLocaleTimeString('pt-BR')}
+                </span>
+              )}
+            </div>
             {sheetError && (
               <p className="text-xs text-destructive">{sheetError}</p>
             )}
