@@ -1,21 +1,23 @@
 
 
-# Alerta de verificacao de pacientes cirurgicos
+# Integracao Google Sheets no ManualPaste
 
-## O que sera feito
+## Arquivo: `src/components/ManualPaste.tsx`
 
-Adicionar um banner de alerta entre os KPI Cards e os ResultCards, visivel apenas apos a comparacao. O alerta orienta o usuario a verificar se todos os pacientes do censo consolidado estao realmente sendo avaliados pela clinica medica, ja que pacientes de clinicas cirurgicas podem estar fisicamente no mesmo setor.
+Adicionar um toggle (Tabs) no topo do card com dois modos: **Colar** e **Google Sheets**.
 
-## Arquivo a modificar
+No modo Google Sheets:
+- Input de URL pre-preenchido com valor default vazio
+- Input de nome da aba (default vazio)
+- Botao "Importar" com loading state
+- Logica de fetch:
+  - Extrair sheet ID via regex: `url.match(/\/d\/([a-zA-Z0-9-_]+)/)`
+  - Fetch CSV: `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`
+  - Passar resultado pelo `parseManualText` + `detectColumns` + `onParsed` existentes
+- Mostrar erro se fetch falhar (planilha nao publica ou link invalido)
+- Apos importar com sucesso, mostrar contagem de linhas/colunas como no modo colar
 
-### `src/pages/Index.tsx`
+O modo Colar permanece identico ao atual. O mapeamento incerto e a contagem de linhas sao compartilhados entre os dois modos.
 
-Adicionar um componente `Alert` (shadcn) entre os KPIs e o `ResultCards`, renderizado condicionalmente quando `result` existe:
-
-- Icone: `AlertTriangle` (lucide)
-- Titulo: "Verifique os pacientes cirurgicos"
-- Descricao: "Alguns pacientes de clinicas cirurgicas podem estar ocupando leitos na sala da clinica medica. Confirme se todos os pacientes listados no censo consolidado estao realmente sob avaliacao da clinica medica."
-- Estilo: variante default do Alert com borda amarela/warning para chamar atencao sem ser agressivo
-
-Nenhum outro arquivo muda. O componente `Alert` ja existe em `src/components/ui/alert.tsx`.
+Nenhum outro arquivo muda. Nenhuma dependencia nova.
 
