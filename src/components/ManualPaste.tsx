@@ -68,7 +68,7 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
     if (!autoSync) return;
     const interval = setInterval(() => {
       if (!syncingRef.current) handleSync(true);
-    }, 60_000);
+    }, 2 * 60 * 60_000);
     return () => clearInterval(interval);
   }, [autoSync, handleSync]);
 
@@ -98,7 +98,7 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Switch id="auto-sync" checked={autoSync} onCheckedChange={setAutoSync} />
-            <Label htmlFor="auto-sync" className="text-xs cursor-pointer">Sync automático (60s)</Label>
+            <Label htmlFor="auto-sync" className="text-xs cursor-pointer">Sync automático (2h)</Label>
           </div>
           {lastSync && (
             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
