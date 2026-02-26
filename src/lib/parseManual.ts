@@ -3,9 +3,38 @@ import type { Patient, ColumnMapping } from './types';
 
 const SECTOR_KEYWORDS = /cl[ií]nica|uti|enfermaria|cirurgia|obstetr|pediatr|emerg|centro|leito/i;
 
-export function detectColumns(rows: string[][]): { mapping: ColumnMapping; confidence: number } {
-  if (rows.length === 0) return { mapping: { prontuario: null, name: null, age: null, sector: null }, confidence: 0 };
+function normalize(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
 
+const HEADER_MAP: Record<string, keyof ColumnMapping> = {
+  prontuario: 'prontuario', pront: 'prontuario', id: 'prontuario',
+  nome: 'name', name: 'name', paciente: 'name',
+  idade: 'age', age: 'age',
+  setor: 'sector', sector: 'sector', unidade: 'sector',
+};
+
+export function detectColumns(rows: string[][]): { mapping: ColumnMapping; confidence: number; hasHeader: boolean } {
+  const empty = { mapping: { prontuario: null, name: null, age: null, sector: null } as ColumnMapping, confidence: 0, hasHeader: false };
+  if (rows.length === 0) return empty;
+
+  // Try header-based detection on first row
+  const firstRow = rows[0];
+  const headerMapping: ColumnMapping = { prontuario: null, name: null, age: null, sector: null };
+  let headerHits = 0;
+  for (let c = 0; c < firstRow.length; c++) {
+    const norm = normalize(firstRow[c] || '');
+    const field = HEADER_MAP[norm];
+    if (field && headerMapping[field] === null) {
+      headerMapping[field] = c;
+      headerHits++;
+    }
+  }
+  if (headerHits >= 2 && headerMapping.prontuario !== null && headerMapping.name !== null) {
+    return { mapping: headerMapping, confidence: 1, hasHeader: true };
+  }
+
+  // Fallback: heuristic-based detection
   const colCount = Math.max(...rows.map(r => r.length));
   const scores: ColumnMapping = { prontuario: null, name: null, age: null, sector: null };
   const colScores: { prontuario: number; name: number; age: number; sector: number }[] = [];
@@ -30,12 +59,10 @@ export function detectColumns(rows: string[][]): { mapping: ColumnMapping; confi
     colScores.push(s);
   }
 
-  // Assign columns by highest score
   const fields: (keyof ColumnMapping)[] = ['prontuario', 'name', 'age', 'sector'];
   const assigned = new Set<number>();
   let totalScore = 0;
 
-  // Sort fields by max score descending for greedy assignment
   const fieldMaxes = fields.map(f => ({
     field: f,
     maxScore: Math.max(...colScores.map(cs => cs[f])),
@@ -59,11 +86,11 @@ export function detectColumns(rows: string[][]): { mapping: ColumnMapping; confi
   }
 
   const confidence = scores.prontuario !== null && scores.name !== null ? (totalScore / (rows.length * 2)) : 0;
-  return { mapping: scores, confidence: Math.min(confidence, 1) };
+  return { mapping: scores, confidence: Math.min(confidence, 1), hasHeader: false };
 }
 
 export function parseManualText(text: string): string[][] {
-  const result = Papa.parse(text.trim(), { delimiter: '\t', skipEmptyLines: true });
+  const result = Papa.parse(text.trim(), { skipEmptyLines: true });
   let rows = result.data as string[][];
 
   // If tab parsing yields single-column rows, try space splitting
