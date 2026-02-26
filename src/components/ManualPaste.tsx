@@ -27,11 +27,12 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
   const [sheetError, setSheetError] = useState('');
 
   const processRows = (parsed: string[][]) => {
-    setRows(parsed);
-    const { mapping: detected, confidence } = detectColumns(parsed);
+    const { mapping: detected, confidence, hasHeader } = detectColumns(parsed);
+    const dataRows = hasHeader ? parsed.slice(1) : parsed;
+    setRows(dataRows);
     setMapping(detected);
     setLowConfidence(confidence < 0.5);
-    onParsed(parsed, detected);
+    onParsed(dataRows, detected);
   };
 
   const handleTextChange = (value: string) => {
