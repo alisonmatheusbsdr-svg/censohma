@@ -1,22 +1,33 @@
 
 
-# Simplificar ManualPaste: fixar link + auto-sync por padrão
+# Nova aba "Vermelha" - Pacientes aguardando retorno
 
-## Problema
-O link da planilha e a aba são sempre os mesmos. O usuário não precisa digitar nada. O componente deve apenas ter um botão "Sincronizar" e mostrar o status, sem tabs, sem textarea, sem input de URL.
+## Contexto
+Pacientes com setor "Vermelha" na planilha manual não devem ser classificados como "Retirar" quando ausentes do censo oficial. Eles estão temporariamente na emergência e podem retornar à clínica médica. Precisam de uma aba dedicada com sinalização própria.
 
-## Mudanças: `src/components/ManualPaste.tsx`
+## Mudanças
 
-1. Fixar o link como constante: `const SHEET_ID = '1ZQctTfNpfxJ-KO0hJAdgEUQrLxg57J2JxJy7nH70M20'`
-2. Remover estados `text`, `sheetUrl`, tabs (Colar/Google Sheets), textarea, input de URL
-3. Simplificar a UI para:
-   - Botão "Sincronizar" que faz fetch imediato
-   - Toggle de auto-sync (60s)
-   - Indicador de último sync
-   - Contagem de linhas/colunas detectadas
-   - Mapeamento de colunas (quando low confidence)
-4. Fazer fetch automático no mount (`useEffect` inicial) para já carregar os dados ao abrir
-5. Remover imports não usados (`Textarea`, `Input`, `Tabs`, `ClipboardPaste`)
+### 1. `src/lib/types.ts`
+- Adicionar campo `vermelha: Patient[]` ao `ComparisonResult`
 
-O componente passa de "Lista Manual" para algo como "Censo Google Sheets" -- card simples com sync.
+### 2. `src/lib/compareData.ts`
+- Na função `comparePatients`: antes de montar `discharges`, separar pacientes cujo setor na planilha manual é "Vermelha" (case-insensitive, incluindo variações como "vermelho", "verm"). Esses pacientes que não aparecem no censo oficial vão para `vermelha` em vez de `discharges`
+- Na função `generateConsolidatedExcel`: pacientes da Vermelha permanecem no censo consolidado (não são removidos como as altas). Adicionar uma 3a aba "Vermelha" no Excel exportado com estilo próprio (cabeçalho laranja/vermelho)
+
+### 3. `src/components/ResultCards.tsx`
+- Adicionar nova aba "Vermelha" com ícone (ex: `Flame` ou `HeartPulse`) e badge contador
+- Conteúdo da aba: lista dos pacientes com setor de origem (CM I / CM II, extraído da planilha), indicando que estão aguardando retorno
+- No censo consolidado: pacientes da Vermelha recebem status `'vermelha'` com badge laranja-avermelhado "Na Vermelha" (sem tachado, sem sugestão de remoção)
+- Remover esses pacientes da contagem/listagem da aba "Retirar da Planilha"
+
+### 4. `src/components/KPICards.tsx`
+- Adicionar KPI card para "Na Vermelha" com contagem
+
+### 5. `src/pages/Index.tsx`
+- Passar `result.vermelha.length` para o KPICards
+
+## Lógica de identificação
+Paciente é considerado "na Vermelha" se:
+- `sector` na planilha manual contém "vermelha" ou "vermelho" (normalizado, case-insensitive)
+- E não aparece no censo oficial (seria classificado como alta, mas na verdade está na emergência)
 
