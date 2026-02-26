@@ -1,24 +1,19 @@
 
 
-# Fix: Auto-detect delimiter e headers para Google Sheets CSV
+# Auto-sync Google Sheets
 
-## Problema
-O Google Sheets exporta CSV com vírgulas e aspas. O `parseManualText` força delimitador `\t`, resultando em 1 coluna.
+## Abordagem
 
-A planilha tem headers claros: **Prontuário**, **NOME**, **IDADE**, **SETOR**.
+Adicionar um toggle de "Sync automático" na aba Google Sheets. Quando ativado, refaz o fetch a cada 60 segundos usando `setInterval`. Mostra indicador de último sync.
 
-## Mudanças
+## Mudanças: `src/components/ManualPaste.tsx`
 
-### 1. `src/lib/parseManual.ts`
+1. Adicionar estado `autoSync` (boolean, default false) e `lastSync` (Date | null)
+2. Adicionar um `Switch` com label "Sync automático" abaixo do botão Importar
+3. `useEffect` que, quando `autoSync` é true e `sheetUrl` é válido, cria um `setInterval` de 60s chamando `handleImportSheet` silenciosamente (sem alterar `loading` visual, apenas um indicador sutil)
+4. Mostrar texto "Último sync: HH:MM:SS" quando `lastSync` existe
+5. Atualizar `lastSync` após cada fetch bem-sucedido (manual ou automático)
+6. Limpar o interval no cleanup do `useEffect`
 
-- **`parseManualText`**: Remover `delimiter: '\t'` do PapaParse para auto-detectar (vírgula, tab, etc.)
-- **`detectColumns`**: Adicionar detecção por header na primeira linha antes da heurística por conteúdo:
-  - Normalizar headers (lowercase, remover acentos)
-  - Mapear: "prontuario"→prontuario, "nome"/"paciente"→name, "idade"→age, "setor"/"unidade"→sector
-  - Se headers detectados, retornar `confidence: 1.0` e flag `hasHeader: true`
-- Alterar retorno de `detectColumns` para incluir `hasHeader: boolean`
-
-### 2. `src/components/ManualPaste.tsx`
-
-- Ao chamar `processRows`, se `hasHeader` for true, remover primeira linha antes de passar para `onParsed`
+Nenhum outro arquivo muda. Nenhuma dependência nova (Switch já existe em `@/components/ui/switch`).
 
