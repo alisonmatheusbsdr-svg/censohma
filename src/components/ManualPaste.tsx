@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { ClipboardPaste, AlertTriangle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ClipboardPaste, AlertTriangle, Sheet, Loader2 } from 'lucide-react';
 import { parseManualText, detectColumns } from '@/lib/parseManual';
 import type { ColumnMapping } from '@/lib/types';
 
@@ -17,6 +20,20 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
   const [mapping, setMapping] = useState<ColumnMapping>({ prontuario: null, name: null, age: null, sector: null });
   const [lowConfidence, setLowConfidence] = useState(false);
 
+  // Google Sheets state
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [sheetName, setSheetName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sheetError, setSheetError] = useState('');
+
+  const processRows = (parsed: string[][]) => {
+    setRows(parsed);
+    const { mapping: detected, confidence } = detectColumns(parsed);
+    setMapping(detected);
+    setLowConfidence(confidence < 0.5);
+    onParsed(parsed, detected);
+  };
+
   const handleTextChange = (value: string) => {
     setText(value);
     if (!value.trim()) {
@@ -24,14 +41,35 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
       setLowConfidence(false);
       return;
     }
+    processRows(parseManualText(value));
+  };
 
-    const parsed = parseManualText(value);
-    setRows(parsed);
+  const handleImportSheet = async () => {
+    setSheetError('');
+    const match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (!match) {
+      setSheetError('Link inválido. Cole o link completo da planilha Google.');
+      return;
+    }
+    if (!sheetName.trim()) {
+      setSheetError('Informe o nome da aba.');
+      return;
+    }
 
-    const { mapping: detected, confidence } = detectColumns(parsed);
-    setMapping(detected);
-    setLowConfidence(confidence < 0.5);
-    onParsed(parsed, detected);
+    setLoading(true);
+    try {
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName.trim())}`;
+      const res = await fetch(csvUrl);
+      if (!res.ok) throw new Error('Falha ao acessar planilha');
+      const csvText = await res.text();
+      if (!csvText.trim()) throw new Error('Planilha vazia');
+      processRows(parseManualText(csvText));
+    } catch {
+      setSheetError('Não foi possível importar. Verifique se a planilha é pública e o nome da aba está correto.');
+      setRows(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const colCount = rows ? Math.max(...rows.map(r => r.length)) : 0;
@@ -43,58 +81,107 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
     if (rows) onParsed(rows, newMapping);
   };
 
+  const sharedFooter = (
+    <>
+      {lowConfidence && rows && rows.length > 0 && (
+        <div className="space-y-3 p-3 bg-warning/10 rounded-lg border border-warning/20">
+          <div className="flex items-center gap-2 text-sm text-warning">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="font-medium">Mapeamento incerto — confirme as colunas:</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {(['prontuario', 'name', 'age', 'sector'] as const).map(field => (
+              <div key={field} className="space-y-1">
+                <Label className="text-xs">
+                  {field === 'prontuario' ? 'Prontuário' : field === 'name' ? 'Nome' : field === 'age' ? 'Idade' : 'Setor'}
+                </Label>
+                <Select value={mapping[field]?.toString() ?? 'none'} onValueChange={v => updateMapping(field, v)}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {colOptions.map(i => (
+                      <SelectItem key={i} value={i.toString()}>
+                        Coluna {String.fromCharCode(65 + i)} {rows![0]?.[i] ? `(${rows![0][i].substring(0, 15)})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {rows && rows.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {rows.length} linhas detectadas • {colCount} colunas
+        </p>
+      )}
+    </>
+  );
+
   return (
     <Card className="h-full border-border/60">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <ClipboardPaste className="h-4 w-4 text-primary" />
-          Lista Manual (Colar)
+          Lista Manual
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Textarea
-          placeholder="Cole aqui os dados da planilha manual (Ctrl+V)..."
-          className="min-h-[140px] font-mono text-xs"
-          value={text}
-          onChange={e => handleTextChange(e.target.value)}
-        />
+        <Tabs defaultValue="paste">
+          <TabsList className="w-full">
+            <TabsTrigger value="paste" className="flex-1 gap-1.5 text-xs">
+              <ClipboardPaste className="h-3.5 w-3.5" />
+              Colar
+            </TabsTrigger>
+            <TabsTrigger value="sheets" className="flex-1 gap-1.5 text-xs">
+              <Sheet className="h-3.5 w-3.5" />
+              Google Sheets
+            </TabsTrigger>
+          </TabsList>
 
-        {lowConfidence && rows && rows.length > 0 && (
-          <div className="space-y-3 p-3 bg-warning/10 rounded-lg border border-warning/20">
-            <div className="flex items-center gap-2 text-sm text-warning">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="font-medium">Mapeamento incerto — confirme as colunas:</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {(['prontuario', 'name', 'age', 'sector'] as const).map(field => (
-                <div key={field} className="space-y-1">
-                  <Label className="text-xs">
-                    {field === 'prontuario' ? 'Prontuário' : field === 'name' ? 'Nome' : field === 'age' ? 'Idade' : 'Setor'}
-                  </Label>
-                  <Select value={mapping[field]?.toString() ?? 'none'} onValueChange={v => updateMapping(field, v)}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {colOptions.map(i => (
-                        <SelectItem key={i} value={i.toString()}>
-                          Coluna {String.fromCharCode(65 + i)} {rows[0]?.[i] ? `(${rows[0][i].substring(0, 15)})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+          <TabsContent value="paste" className="space-y-3">
+            <Textarea
+              placeholder="Cole aqui os dados da planilha manual (Ctrl+V)..."
+              className="min-h-[140px] font-mono text-xs"
+              value={text}
+              onChange={e => handleTextChange(e.target.value)}
+            />
+          </TabsContent>
 
-        {rows && rows.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {rows.length} linhas detectadas • {colCount} colunas
-          </p>
-        )}
+          <TabsContent value="sheets" className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-xs">Link da Planilha</Label>
+              <Input
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="text-xs"
+                value={sheetUrl}
+                onChange={e => setSheetUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Nome da Aba</Label>
+              <Input
+                placeholder="Ex: Confere Censo - CM"
+                className="text-xs"
+                value={sheetName}
+                onChange={e => setSheetName(e.target.value)}
+              />
+            </div>
+            <Button onClick={handleImportSheet} disabled={loading} className="w-full gap-2" size="sm">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sheet className="h-4 w-4" />}
+              {loading ? 'Importando...' : 'Importar'}
+            </Button>
+            {sheetError && (
+              <p className="text-xs text-destructive">{sheetError}</p>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {sharedFooter}
       </CardContent>
     </Card>
   );
