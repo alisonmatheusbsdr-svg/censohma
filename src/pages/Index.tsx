@@ -115,6 +115,7 @@ const Index = () => {
             discharges={result.discharges.length}
             admissions={result.admissions.length}
             transfers={result.transfers.length}
+            vermelha={result.vermelha.length}
           />
         )}
 

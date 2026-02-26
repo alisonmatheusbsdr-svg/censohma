@@ -9,8 +9,11 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
   manual.forEach(p => manualMap.set(p.prontuario, p));
   official.forEach(p => officialMap.set(p.prontuario, p));
 
-  // Discharges: in manual but NOT in official
-  const discharges = manual.filter(p => !officialMap.has(p.prontuario));
+  // Separate "Vermelha" patients from discharges
+  const isVermelha = (sector: string) => /vermelh[ao]?/i.test(sector.trim());
+  const notInOfficial = manual.filter(p => !officialMap.has(p.prontuario));
+  const vermelha = notInOfficial.filter(p => isVermelha(p.sector));
+  const discharges = notInOfficial.filter(p => !isVermelha(p.sector));
 
   // Admissions: in official but NOT in manual
   const admissions = official.filter(p => !manualMap.has(p.prontuario));
@@ -86,12 +89,13 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
     }
   }
 
-  return { discharges, admissions, transfers, alerts };
+  return { discharges, admissions, transfers, vermelha, alerts };
 }
 
 export function generateConsolidatedExcel(manual: Patient[], result: ComparisonResult): ArrayBuffer {
   const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
   const admissionIds = new Set(result.admissions.map(p => p.prontuario));
+  const vermelhaIds = new Set(result.vermelha.map(p => p.prontuario));
   const oldSectorMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.oldSector]));
 
   const consolidated = manual.filter(p => !dischargeIds.has(p.prontuario));
@@ -107,7 +111,7 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
   const headers = ['Status', 'Prontuário', 'Nome', 'Idade', ' ', 'Setor', 'Mudança de Setor'];
 
   const rows = consolidated.map(p => [
-    admissionIds.has(p.prontuario) ? 'Admissão' : 'Mantido',
+    vermelhaIds.has(p.prontuario) ? 'Na Vermelha' : admissionIds.has(p.prontuario) ? 'Admissão' : 'Mantido',
     p.prontuario,
     p.name,
     p.age ?? '',
@@ -131,6 +135,10 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
     fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFE0B2' } },
   };
 
+  const vermelhaStyle = {
+    fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFDAD6' } },
+  };
+
   const transferCellStyle = {
     fill: { patternType: 'solid' as const, fgColor: { rgb: 'C6EFCE' } },
   };
@@ -146,7 +154,9 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
 
   // Apply row styles
   for (let r = 1; r < rowCount; r++) {
-    const isAdmission = rows[r - 1][0] === 'Admissão';
+    const status = rows[r - 1][0];
+    const isAdmission = status === 'Admissão';
+    const isVermelha = status === 'Na Vermelha';
     const hasTransfer = String(rows[r - 1][6]).length > 0;
 
     for (let c = 0; c < colCount; c++) {
@@ -155,6 +165,8 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
 
       if (c === 6 && hasTransfer) {
         ws[addr].s = transferCellStyle;
+      } else if (isVermelha) {
+        ws[addr].s = vermelhaStyle;
       } else if (isAdmission) {
         ws[addr].s = admissionStyle;
       }
@@ -213,6 +225,48 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
     });
 
     XLSX.utils.book_append_sheet(wb, ws2, 'Retirar da Planilha');
+  }
+
+  // ── Aba 3: Vermelha (aguardando retorno) ────────────────────────────────
+  if (result.vermelha.length > 0) {
+    const vHeaders = ['Prontuário', 'Nome', 'Idade', 'Setor de Origem'];
+    const vRows = result.vermelha.map(p => [
+      p.prontuario, p.name, p.age ?? '', p.sector,
+    ]);
+
+    const ws3 = XLSX.utils.aoa_to_sheet([vHeaders, ...vRows]);
+
+    const vHeaderStyle = {
+      font: { bold: true, color: { rgb: '7C2D12' } },
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFCDD2' } },
+      alignment: { horizontal: 'center' as const },
+    };
+
+    const vRowStyle = {
+      fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFF0F0' } },
+    };
+
+    const vColCount = vHeaders.length;
+    const vRowCount = vRows.length + 1;
+
+    for (let c = 0; c < vColCount; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws3[addr]) ws3[addr].s = vHeaderStyle;
+    }
+
+    for (let r = 1; r < vRowCount; r++) {
+      for (let c = 0; c < vColCount; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (ws3[addr]) ws3[addr].s = vRowStyle;
+      }
+    }
+
+    ws3['!cols'] = vHeaders.map((h, i) => {
+      const maxLen = Math.max(h.length, ...vRows.map(row => String(row[i]).length));
+      return { wch: maxLen + 2 };
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws3, 'Vermelha');
   }
 
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

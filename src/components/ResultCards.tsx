@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
-import { TrendingDown, TrendingUp, ArrowRightLeft, AlertTriangle, ArrowRight, ClipboardList } from 'lucide-react';
+import { TrendingDown, TrendingUp, ArrowRightLeft, AlertTriangle, ArrowRight, ClipboardList, Flame } from 'lucide-react';
 import type { ComparisonResult, Patient } from '@/lib/types';
 
 interface ResultCardsProps {
@@ -28,17 +28,22 @@ const ALERT_TYPE_COLOR: Record<string, string> = {
   age_mismatch: 'bg-transfer text-transfer-foreground',
 };
 
-type ConsolidatedPatient = Patient & { status: 'mantido' | 'retirar' | 'admissao' };
+type ConsolidatedPatient = Patient & { status: 'mantido' | 'retirar' | 'admissao' | 'vermelha' };
 
 export function ResultCards({ result, manualPatients }: ResultCardsProps) {
   const consolidatedList = useMemo<ConsolidatedPatient[]>(() => {
     const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
+    const vermelhaIds = new Set(result.vermelha.map(p => p.prontuario));
     const transferMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.newSector]));
 
     const list: ConsolidatedPatient[] = manualPatients.map(p => ({
       ...p,
       sector: transferMap.get(p.prontuario) ?? p.sector,
-      status: dischargeIds.has(p.prontuario) ? 'retirar' as const : 'mantido' as const,
+      status: dischargeIds.has(p.prontuario)
+        ? 'retirar' as const
+        : vermelhaIds.has(p.prontuario)
+          ? 'vermelha' as const
+          : 'mantido' as const,
     }));
 
     result.admissions.forEach(p => {
@@ -98,6 +103,18 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
           </Badge>
         </TabsTrigger>
 
+        {/* Vermelha */}
+        <TabsTrigger
+          value="vermelha"
+          className="flex items-center gap-1.5 data-[state=active]:bg-background"
+        >
+          <Flame className="h-3.5 w-3.5 text-orange-600" />
+          <span className="text-xs font-medium">Vermelha</span>
+          <Badge className="ml-0.5 h-4 px-1.5 text-[10px] bg-orange-500 text-white">
+            {result.vermelha.length}
+          </Badge>
+        </TabsTrigger>
+
         {/* Alertas */}
         <TabsTrigger
           value="alertas"
@@ -138,7 +155,9 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
                       ? 'bg-destructive/10'
                       : p.status === 'admissao'
                         ? 'bg-warning/10'
-                        : '';
+                        : p.status === 'vermelha'
+                          ? 'bg-orange-100 dark:bg-orange-950/30'
+                          : '';
                   const textClass = p.status === 'retirar' ? 'line-through text-muted-foreground' : '';
                   return (
                     <TableRow key={`${p.prontuario}-${i}`} className={rowClass}>
@@ -162,10 +181,12 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
                               ? 'border-destructive/50 text-destructive bg-destructive/10'
                               : p.status === 'admissao'
                                 ? 'border-warning/50 text-warning bg-warning/10'
-                                : 'border-success/50 text-success bg-success/10'
+                                : p.status === 'vermelha'
+                                  ? 'border-orange-400/50 text-orange-700 bg-orange-100 dark:text-orange-400 dark:bg-orange-950/40'
+                                  : 'border-success/50 text-success bg-success/10'
                           }`}
                         >
-                          {p.status === 'retirar' ? 'Retirar' : p.status === 'admissao' ? 'Admissão' : 'Mantido'}
+                          {p.status === 'retirar' ? 'Retirar' : p.status === 'admissao' ? 'Admissão' : p.status === 'vermelha' ? 'Na Vermelha' : 'Mantido'}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -288,6 +309,46 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
                         </span>
                       </div>
                       {i < result.transfers.length - 1 && <Separator />}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </TabsContent>
+
+      {/* ── Vermelha ──────────────────────────────────────── */}
+      <TabsContent value="vermelha" className="mt-0">
+        <div className="rounded-md border border-orange-400/30 bg-card">
+          <div className="px-4 py-2.5 border-b border-orange-300/20 bg-orange-50 dark:bg-orange-950/20">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold text-orange-700 dark:text-orange-400">Pacientes na ala Vermelha.</span>{' '}
+              Estão temporariamente na emergência e podem retornar à clínica médica.
+            </p>
+          </div>
+          <ScrollArea className="h-96">
+            <div className="p-3">
+              {result.vermelha.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic text-center py-8">
+                  Nenhum paciente na Vermelha
+                </p>
+              ) : (
+                <ul className="space-y-0">
+                  {result.vermelha.map((p, i) => (
+                    <li key={i}>
+                      <div className="flex items-start justify-between py-2.5 px-1">
+                        <div>
+                          <p className="text-sm font-semibold leading-tight">{p.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Setor de origem: <span className="font-medium text-orange-700 dark:text-orange-400">{p.sector}</span>
+                          </p>
+                        </div>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap ml-3 mt-0.5 font-mono">
+                          #{p.prontuario}
+                        </span>
+                      </div>
+                      {i < result.vermelha.length - 1 && <Separator />}
                     </li>
                   ))}
                 </ul>

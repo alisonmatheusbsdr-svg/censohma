@@ -30,6 +30,7 @@ export interface ComparisonResult {
   discharges: Patient[];
   admissions: Patient[];
   transfers: { patient: Patient; oldSector: string; newSector: string }[];
+  vermelha: Patient[];
   alerts: DataAlert[];
 }
 
