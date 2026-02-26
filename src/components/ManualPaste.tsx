@@ -11,6 +11,8 @@ import { ClipboardPaste, AlertTriangle, Sheet, Loader2, RefreshCw } from 'lucide
 import { parseManualText, detectColumns } from '@/lib/parseManual';
 import type { ColumnMapping } from '@/lib/types';
 
+const SHEET_NAME = 'Confere Censo - CM';
+
 interface ManualPasteProps {
   onParsed: (rows: string[][], mapping: ColumnMapping) => void;
 }
@@ -23,7 +25,6 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
 
   // Google Sheets state
   const [sheetUrl, setSheetUrl] = useState('');
-  const [sheetName, setSheetName] = useState('');
   const [loading, setLoading] = useState(false);
   const [sheetError, setSheetError] = useState('');
   const [autoSync, setAutoSync] = useState(false);
@@ -56,15 +57,11 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
       if (!silent) setSheetError('Link inválido. Cole o link completo da planilha Google.');
       return;
     }
-    if (!sheetName.trim()) {
-      if (!silent) setSheetError('Informe o nome da aba.');
-      return;
-    }
 
     if (!silent) setLoading(true);
     syncingRef.current = true;
     try {
-      const csvUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName.trim())}`;
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
       const res = await fetch(csvUrl);
       if (!res.ok) throw new Error('Falha ao acessar planilha');
       const csvText = await res.text();
@@ -80,7 +77,7 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
       if (!silent) setLoading(false);
       syncingRef.current = false;
     }
-  }, [sheetUrl, sheetName]);
+  }, [sheetUrl]);
 
   useEffect(() => {
     if (!autoSync || !sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)) return;
@@ -178,15 +175,6 @@ export function ManualPaste({ onParsed }: ManualPasteProps) {
                 className="text-xs"
                 value={sheetUrl}
                 onChange={e => setSheetUrl(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Nome da Aba</Label>
-              <Input
-                placeholder="Ex: Confere Censo - CM"
-                className="text-xs"
-                value={sheetName}
-                onChange={e => setSheetName(e.target.value)}
               />
             </div>
             <Button onClick={() => handleImportSheet(false)} disabled={loading} className="w-full gap-2" size="sm">
