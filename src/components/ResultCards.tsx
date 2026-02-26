@@ -155,9 +155,7 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
                       ? 'bg-destructive/10'
                       : p.status === 'admissao'
                         ? 'bg-warning/10'
-                        : p.status === 'vermelha'
-                          ? 'bg-orange-100 dark:bg-orange-950/30'
-                          : '';
+                        : '';
                   const textClass = p.status === 'retirar' ? 'line-through text-muted-foreground' : '';
                   return (
                     <TableRow key={`${p.prontuario}-${i}`} className={rowClass}>
@@ -182,11 +180,11 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
                               : p.status === 'admissao'
                                 ? 'border-warning/50 text-warning bg-warning/10'
                                 : p.status === 'vermelha'
-                                  ? 'border-orange-400/50 text-orange-700 bg-orange-100 dark:text-orange-400 dark:bg-orange-950/40'
+                                  ? 'border-red-500/50 text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-950/40'
                                   : 'border-success/50 text-success bg-success/10'
                           }`}
                         >
-                          {p.status === 'retirar' ? 'Retirar' : p.status === 'admissao' ? 'Admissão' : p.status === 'vermelha' ? 'Na Vermelha' : 'Mantido'}
+                          {p.status === 'retirar' ? 'Retirar' : p.status === 'admissao' ? 'Admissão' : p.status === 'vermelha' ? 'Vermelha' : 'Mantido'}
                         </Badge>
                       </TableCell>
                     </TableRow>
