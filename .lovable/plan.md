@@ -1,23 +1,24 @@
 
 
-# Integracao Google Sheets no ManualPaste
+# Fix: Auto-detect delimiter e headers para Google Sheets CSV
 
-## Arquivo: `src/components/ManualPaste.tsx`
+## Problema
+O Google Sheets exporta CSV com vírgulas e aspas. O `parseManualText` força delimitador `\t`, resultando em 1 coluna.
 
-Adicionar um toggle (Tabs) no topo do card com dois modos: **Colar** e **Google Sheets**.
+A planilha tem headers claros: **Prontuário**, **NOME**, **IDADE**, **SETOR**.
 
-No modo Google Sheets:
-- Input de URL pre-preenchido com valor default vazio
-- Input de nome da aba (default vazio)
-- Botao "Importar" com loading state
-- Logica de fetch:
-  - Extrair sheet ID via regex: `url.match(/\/d\/([a-zA-Z0-9-_]+)/)`
-  - Fetch CSV: `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`
-  - Passar resultado pelo `parseManualText` + `detectColumns` + `onParsed` existentes
-- Mostrar erro se fetch falhar (planilha nao publica ou link invalido)
-- Apos importar com sucesso, mostrar contagem de linhas/colunas como no modo colar
+## Mudanças
 
-O modo Colar permanece identico ao atual. O mapeamento incerto e a contagem de linhas sao compartilhados entre os dois modos.
+### 1. `src/lib/parseManual.ts`
 
-Nenhum outro arquivo muda. Nenhuma dependencia nova.
+- **`parseManualText`**: Remover `delimiter: '\t'` do PapaParse para auto-detectar (vírgula, tab, etc.)
+- **`detectColumns`**: Adicionar detecção por header na primeira linha antes da heurística por conteúdo:
+  - Normalizar headers (lowercase, remover acentos)
+  - Mapear: "prontuario"→prontuario, "nome"/"paciente"→name, "idade"→age, "setor"/"unidade"→sector
+  - Se headers detectados, retornar `confidence: 1.0` e flag `hasHeader: true`
+- Alterar retorno de `detectColumns` para incluir `hasHeader: boolean`
+
+### 2. `src/components/ManualPaste.tsx`
+
+- Ao chamar `processRows`, se `hasHeader` for true, remover primeira linha antes de passar para `onParsed`
 
