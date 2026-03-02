@@ -1,18 +1,19 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { Users, TrendingDown, TrendingUp, Activity, Flame } from 'lucide-react';
+import { Users, TrendingDown, TrendingUp, Activity, Flame, HelpCircle } from 'lucide-react';
 
 interface KPICardsProps {
   totalCensus: number;
   discharges: number;
+  uncertainDischarges: number;
   admissions: number;
   transfers: number;
   vermelha: number;
 }
 
-export function KPICards({ totalCensus, discharges, admissions, transfers, vermelha }: KPICardsProps) {
+export function KPICards({ totalCensus, discharges, uncertainDischarges, admissions, transfers, vermelha }: KPICardsProps) {
   const cards = [
     { label: 'Censo Total', value: totalCensus, icon: Users, color: 'text-primary' },
-    { label: 'Altas', value: discharges, icon: TrendingDown, color: 'text-destructive' },
+    { label: 'Altas', value: discharges, icon: TrendingDown, color: 'text-destructive', extra: uncertainDischarges > 0 ? `+${uncertainDischarges} ?` : undefined },
     { label: 'Admissões', value: admissions, icon: TrendingUp, color: 'text-success' },
     { label: 'Transferências', value: transfers, icon: Activity, color: 'text-transfer' },
     { label: 'Na Vermelha', value: vermelha, icon: Flame, color: 'text-orange-600' },
@@ -28,7 +29,14 @@ export function KPICards({ totalCensus, discharges, admissions, transfers, verme
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{c.label}</p>
-              <p className="text-2xl font-bold">{c.value}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-2xl font-bold">{c.value}</p>
+                {c.extra && (
+                  <span className="text-xs font-semibold text-amber-600 bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400 px-1.5 py-0.5 rounded">
+                    {c.extra}
+                  </span>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

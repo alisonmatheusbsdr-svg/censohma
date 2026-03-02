@@ -2,6 +2,25 @@ import * as XLSX from 'xlsx-js-style';
 import type { Patient, ComparisonResult, DataAlert } from './types';
 import { normalizeSectorForComparison } from './cleanData';
 
+function normalizeNameForMatch(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function nameTokensMatch(a: string, b: string): boolean {
+  const normalized1 = normalizeNameForMatch(a);
+  const normalized2 = normalizeNameForMatch(b);
+  if (normalized1 === normalized2) return true;
+  const tokens1 = normalized1.split(' ');
+  const tokens2 = normalized2.split(' ');
+  const common = tokens1.filter(t => t.length > 2 && tokens2.includes(t));
+  return common.length >= 2;
+}
+
 export function comparePatients(manual: Patient[], official: Patient[]): ComparisonResult {
   const manualMap = new Map<string, Patient>();
   const officialMap = new Map<string, Patient>();
@@ -13,7 +32,22 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
   const isVermelha = (sector: string) => /vermelh[ao]?/i.test(sector.trim());
   const notInOfficial = manual.filter(p => !officialMap.has(p.prontuario));
   const vermelha = notInOfficial.filter(p => isVermelha(p.sector));
-  const discharges = notInOfficial.filter(p => !isVermelha(p.sector));
+  const candidateDischarges = notInOfficial.filter(p => !isVermelha(p.sector));
+
+  // Double-check: name matching for uncertain discharges
+  const discharges: Patient[] = [];
+  const uncertainDischarges: ComparisonResult['uncertainDischarges'] = [];
+
+  for (const patient of candidateDischarges) {
+    const possibleMatch = official.find(op =>
+      !manualMap.has(op.prontuario) && nameTokensMatch(patient.name, op.name)
+    );
+    if (possibleMatch) {
+      uncertainDischarges.push({ patient, possibleMatch });
+    } else {
+      discharges.push(patient);
+    }
+  }
 
   // Admissions: in official but NOT in manual
   const admissions = official.filter(p => !manualMap.has(p.prontuario));
@@ -89,11 +123,12 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
     }
   }
 
-  return { discharges, admissions, transfers, vermelha, alerts };
+  return { discharges, uncertainDischarges, admissions, transfers, vermelha, alerts };
 }
 
 export function generateConsolidatedExcel(manual: Patient[], result: ComparisonResult): ArrayBuffer {
   const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
+  const uncertainIds = new Set(result.uncertainDischarges.map(u => u.patient.prontuario));
   const admissionIds = new Set(result.admissions.map(p => p.prontuario));
   const vermelhaIds = new Set(result.vermelha.map(p => p.prontuario));
   const oldSectorMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.oldSector]));
@@ -111,7 +146,7 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
   const headers = ['Status', 'Prontuário', 'Nome', 'Idade', ' ', 'Setor', 'Mudança de Setor'];
 
   const rows = consolidated.map(p => [
-    vermelhaIds.has(p.prontuario) ? 'Na Vermelha' : admissionIds.has(p.prontuario) ? 'Admissão' : 'Mantido',
+    vermelhaIds.has(p.prontuario) ? 'Na Vermelha' : admissionIds.has(p.prontuario) ? 'Admissão' : uncertainIds.has(p.prontuario) ? 'Verificar' : 'Mantido',
     p.prontuario,
     p.name,
     p.age ?? '',
@@ -143,8 +178,12 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
     fill: { patternType: 'solid' as const, fgColor: { rgb: 'C6EFCE' } },
   };
 
+  const uncertainStyle = {
+    fill: { patternType: 'solid' as const, fgColor: { rgb: 'FFF9C4' } },
+  };
+
   const colCount = headers.length;
-  const rowCount = rows.length + 1; // +1 for header
+  const rowCount = rows.length + 1;
 
   // Apply header styles (row 0)
   for (let c = 0; c < colCount; c++) {
@@ -157,6 +196,7 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
     const status = rows[r - 1][0];
     const isAdmission = status === 'Admissão';
     const isVermelha = status === 'Na Vermelha';
+    const isUncertain = status === 'Verificar';
     const hasTransfer = String(rows[r - 1][6]).length > 0;
 
     for (let c = 0; c < colCount; c++) {
@@ -167,6 +207,8 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
         ws[addr].s = transferCellStyle;
       } else if (isVermelha) {
         ws[addr].s = vermelhaStyle;
+      } else if (isUncertain) {
+        ws[addr].s = uncertainStyle;
       } else if (isAdmission) {
         ws[addr].s = admissionStyle;
       }
@@ -271,3 +313,4 @@ export function generateConsolidatedExcel(manual: Patient[], result: ComparisonR
 
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }
+
