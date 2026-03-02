@@ -20,6 +20,7 @@ const Index = () => {
   const [manualMapping, setManualMapping] = useState<ColumnMapping>({ prontuario: null, name: null, age: null, sector: null });
   const [manualPatients, setManualPatients] = useState<Patient[]>([]);
   const [result, setResult] = useState<ComparisonResult | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   const handleOfficialFile = useCallback((data: ArrayBuffer) => {
     try {
@@ -117,6 +118,8 @@ const Index = () => {
             admissions={result.admissions.length}
             transfers={result.transfers.length}
             vermelha={result.vermelha.length}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
           />
         )}
 
@@ -132,7 +135,7 @@ const Index = () => {
         )}
 
         {/* Results */}
-        {result && <ResultCards result={result} manualPatients={manualPatients} />}
+        {result && <ResultCards result={result} manualPatients={manualPatients} activeFilter={activeFilter} />}
       </main>
     </div>
   );
