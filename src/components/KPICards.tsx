@@ -10,16 +10,16 @@ interface KPICardsProps {
   transfers: number;
   vermelha: number;
   alerts: number;
-  activeFilter: string | null;
-  onFilterChange: (filter: string | null) => void;
+  activeFilter: string;
+  onFilterChange: (filter: string) => void;
 }
 
 export function KPICards({ totalCensus, discharges, uncertainDischarges, admissions, transfers, vermelha, alerts, activeFilter, onFilterChange }: KPICardsProps) {
   const cards = [
-    { label: 'Censo Total', value: totalCensus, icon: Users, color: 'text-primary', filterKey: null as string | null },
-    { label: 'Altas', value: discharges, icon: TrendingDown, color: 'text-destructive', filterKey: 'altas', extra: uncertainDischarges > 0 ? `+${uncertainDischarges} ?` : undefined },
+    { label: 'Censo Total', value: totalCensus, icon: Users, color: 'text-primary', filterKey: 'consolidado' },
+    { label: 'Altas', value: discharges, icon: TrendingDown, color: 'text-destructive', filterKey: 'retirar', extra: uncertainDischarges > 0 ? `+${uncertainDischarges} ?` : undefined },
     { label: 'Admissões', value: admissions, icon: TrendingUp, color: 'text-success', filterKey: 'admissoes' },
-    { label: 'Transferências', value: transfers, icon: Activity, color: 'text-transfer', filterKey: 'transferencias' },
+    { label: 'Transferências', value: transfers, icon: Activity, color: 'text-transfer', filterKey: 'setor' },
     { label: 'Na Vermelha', value: vermelha, icon: Flame, color: 'text-orange-600', filterKey: 'vermelha' },
     { label: 'Alertas', value: alerts, icon: AlertTriangle, color: 'text-amber-600', filterKey: 'alertas' },
   ];
@@ -35,7 +35,7 @@ export function KPICards({ totalCensus, discharges, uncertainDischarges, admissi
               'border-border/60 cursor-pointer transition-all hover:shadow-md',
               isActive && 'ring-2 ring-primary shadow-md'
             )}
-            onClick={() => onFilterChange(isActive ? null : c.filterKey)}
+            onClick={() => onFilterChange(c.filterKey)}
           >
             <CardContent className="p-4 flex items-center gap-3">
               <div className={`p-2 rounded-lg bg-muted ${c.color}`}>

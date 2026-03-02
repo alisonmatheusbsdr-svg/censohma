@@ -20,7 +20,7 @@ const Index = () => {
   const [manualMapping, setManualMapping] = useState<ColumnMapping>({ prontuario: null, name: null, age: null, sector: null });
   const [manualPatients, setManualPatients] = useState<Patient[]>([]);
   const [result, setResult] = useState<ComparisonResult | null>(null);
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string>('consolidado');
 
   const handleOfficialFile = useCallback((data: ArrayBuffer) => {
     try {
@@ -136,7 +136,7 @@ const Index = () => {
         )}
 
         {/* Results */}
-        {result && <ResultCards result={result} manualPatients={manualPatients} activeFilter={activeFilter} />}
+        {result && <ResultCards result={result} manualPatients={manualPatients} activeFilter={activeFilter} onTabChange={setActiveFilter} />}
       </main>
     </div>
   );
