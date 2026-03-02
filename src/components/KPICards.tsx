@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { Users, TrendingDown, TrendingUp, Activity, Flame } from 'lucide-react';
+import { Users, TrendingDown, TrendingUp, Activity, Flame, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface KPICardsProps {
@@ -9,21 +9,23 @@ interface KPICardsProps {
   admissions: number;
   transfers: number;
   vermelha: number;
+  alerts: number;
   activeFilter: string | null;
   onFilterChange: (filter: string | null) => void;
 }
 
-export function KPICards({ totalCensus, discharges, uncertainDischarges, admissions, transfers, vermelha, activeFilter, onFilterChange }: KPICardsProps) {
+export function KPICards({ totalCensus, discharges, uncertainDischarges, admissions, transfers, vermelha, alerts, activeFilter, onFilterChange }: KPICardsProps) {
   const cards = [
     { label: 'Censo Total', value: totalCensus, icon: Users, color: 'text-primary', filterKey: null as string | null },
     { label: 'Altas', value: discharges, icon: TrendingDown, color: 'text-destructive', filterKey: 'altas', extra: uncertainDischarges > 0 ? `+${uncertainDischarges} ?` : undefined },
     { label: 'Admissões', value: admissions, icon: TrendingUp, color: 'text-success', filterKey: 'admissoes' },
     { label: 'Transferências', value: transfers, icon: Activity, color: 'text-transfer', filterKey: 'transferencias' },
     { label: 'Na Vermelha', value: vermelha, icon: Flame, color: 'text-orange-600', filterKey: 'vermelha' },
+    { label: 'Alertas', value: alerts, icon: AlertTriangle, color: 'text-amber-600', filterKey: 'alertas' },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
       {cards.map(c => {
         const isActive = activeFilter === c.filterKey;
         return (

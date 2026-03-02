@@ -118,6 +118,7 @@ const Index = () => {
             admissions={result.admissions.length}
             transfers={result.transfers.length}
             vermelha={result.vermelha.length}
+            alerts={result.alerts.length}
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
           />
