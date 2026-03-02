@@ -10,7 +10,8 @@ import type { ComparisonResult, Patient } from '@/lib/types';
 interface ResultCardsProps {
   result: ComparisonResult;
   manualPatients: Patient[];
-  activeFilter: string | null;
+  activeFilter: string;
+  onTabChange: (tab: string) => void;
 }
 
 function patientLabel(name: string, age: number | null) {
@@ -31,7 +32,7 @@ const ALERT_TYPE_COLOR: Record<string, string> = {
 
 type ConsolidatedPatient = Patient & { status: 'mantido' | 'retirar' | 'admissao' | 'vermelha' | 'verificar' };
 
-export function ResultCards({ result, manualPatients, activeFilter }: ResultCardsProps) {
+export function ResultCards({ result, manualPatients, activeFilter, onTabChange }: ResultCardsProps) {
   const consolidatedList = useMemo<ConsolidatedPatient[]>(() => {
     const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
     const uncertainIds = new Set(result.uncertainDischarges.map(u => u.patient.prontuario));
@@ -59,26 +60,11 @@ export function ResultCards({ result, manualPatients, activeFilter }: ResultCard
 
   const transferIds = useMemo(() => new Set(result.transfers.map(t => t.patient.prontuario)), [result.transfers]);
 
-  const filteredList = useMemo(() => {
-    if (!activeFilter) return consolidatedList;
-    switch (activeFilter) {
-      case 'altas':
-        return consolidatedList.filter(p => p.status === 'retirar' || p.status === 'verificar');
-      case 'admissoes':
-        return consolidatedList.filter(p => p.status === 'admissao');
-      case 'transferencias':
-        return consolidatedList.filter(p => transferIds.has(p.prontuario));
-      case 'vermelha':
-        return consolidatedList.filter(p => p.status === 'vermelha');
-      default:
-        return consolidatedList;
-    }
-  }, [consolidatedList, activeFilter, transferIds]);
 
   const totalDischargeTab = result.discharges.length + result.uncertainDischarges.length;
 
   return (
-    <Tabs defaultValue="consolidado" className="w-full">
+    <Tabs value={activeFilter} onValueChange={onTabChange} className="w-full">
       <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1 mb-1">
         {/* Censo Consolidado */}
         <TabsTrigger
@@ -88,13 +74,8 @@ export function ResultCards({ result, manualPatients, activeFilter }: ResultCard
           <ClipboardList className="h-3.5 w-3.5 text-primary" />
           <span className="text-xs font-medium">Censo Consolidado</span>
           <Badge className="ml-0.5 h-4 px-1.5 text-[10px] bg-primary text-primary-foreground">
-            {filteredList.filter(p => p.status !== 'retirar').length}
+            {consolidatedList.filter(p => p.status !== 'retirar').length}
           </Badge>
-          {activeFilter && (
-            <span className="text-[10px] text-muted-foreground ml-1">
-              (filtrado)
-            </span>
-          )}
         </TabsTrigger>
         {/* Retirar da Planilha */}
         <TabsTrigger
@@ -183,7 +164,7 @@ export function ResultCards({ result, manualPatients, activeFilter }: ResultCard
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredList.map((p, i) => {
+                {consolidatedList.map((p, i) => {
                   const rowClass =
                     p.status === 'retirar'
                       ? 'bg-destructive/10'
