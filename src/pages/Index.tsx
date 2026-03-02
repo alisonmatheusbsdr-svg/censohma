@@ -113,6 +113,7 @@ const Index = () => {
           <KPICards
             totalCensus={totalCensus}
             discharges={result.discharges.length}
+            uncertainDischarges={result.uncertainDischarges.length}
             admissions={result.admissions.length}
             transfers={result.transfers.length}
             vermelha={result.vermelha.length}

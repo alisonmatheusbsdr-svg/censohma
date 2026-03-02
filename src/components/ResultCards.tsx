@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
-import { TrendingDown, TrendingUp, ArrowRightLeft, AlertTriangle, ArrowRight, ClipboardList, Flame } from 'lucide-react';
+import { TrendingDown, TrendingUp, ArrowRightLeft, AlertTriangle, ArrowRight, ClipboardList, Flame, HelpCircle } from 'lucide-react';
 import type { ComparisonResult, Patient } from '@/lib/types';
 
 interface ResultCardsProps {
@@ -28,11 +28,12 @@ const ALERT_TYPE_COLOR: Record<string, string> = {
   age_mismatch: 'bg-transfer text-transfer-foreground',
 };
 
-type ConsolidatedPatient = Patient & { status: 'mantido' | 'retirar' | 'admissao' | 'vermelha' };
+type ConsolidatedPatient = Patient & { status: 'mantido' | 'retirar' | 'admissao' | 'vermelha' | 'verificar' };
 
 export function ResultCards({ result, manualPatients }: ResultCardsProps) {
   const consolidatedList = useMemo<ConsolidatedPatient[]>(() => {
     const dischargeIds = new Set(result.discharges.map(p => p.prontuario));
+    const uncertainIds = new Set(result.uncertainDischarges.map(u => u.patient.prontuario));
     const vermelhaIds = new Set(result.vermelha.map(p => p.prontuario));
     const transferMap = new Map(result.transfers.map(t => [t.patient.prontuario, t.newSector]));
 
@@ -41,9 +42,11 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
       sector: transferMap.get(p.prontuario) ?? p.sector,
       status: dischargeIds.has(p.prontuario)
         ? 'retirar' as const
-        : vermelhaIds.has(p.prontuario)
-          ? 'vermelha' as const
-          : 'mantido' as const,
+        : uncertainIds.has(p.prontuario)
+          ? 'verificar' as const
+          : vermelhaIds.has(p.prontuario)
+            ? 'vermelha' as const
+            : 'mantido' as const,
     }));
 
     result.admissions.forEach(p => {
@@ -52,6 +55,8 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
 
     return list;
   }, [manualPatients, result]);
+
+  const totalDischargeTab = result.discharges.length + result.uncertainDischarges.length;
 
   return (
     <Tabs defaultValue="consolidado" className="w-full">
@@ -77,6 +82,11 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
           <Badge variant="destructive" className="ml-0.5 h-4 px-1.5 text-[10px]">
             {result.discharges.length}
           </Badge>
+          {result.uncertainDischarges.length > 0 && (
+            <Badge className="ml-0.5 h-4 px-1.5 text-[10px] bg-amber-500 text-white">
+              {result.uncertainDischarges.length} ?
+            </Badge>
+          )}
         </TabsTrigger>
 
         {/* Admissões */}
@@ -155,7 +165,9 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
                       ? 'bg-destructive/10'
                       : p.status === 'admissao'
                         ? 'bg-warning/10'
-                        : '';
+                        : p.status === 'verificar'
+                          ? 'bg-amber-50 dark:bg-amber-950/20'
+                          : '';
                   const textClass = p.status === 'retirar' ? 'line-through text-muted-foreground' : '';
                   return (
                     <TableRow key={`${p.prontuario}-${i}`} className={rowClass}>
@@ -181,10 +193,12 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
                                 ? 'border-warning/50 text-warning bg-warning/10'
                                 : p.status === 'vermelha'
                                   ? 'border-red-500/50 text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-950/40'
-                                  : 'border-success/50 text-success bg-success/10'
+                                  : p.status === 'verificar'
+                                    ? 'border-amber-500/50 text-amber-700 bg-amber-100 dark:text-amber-400 dark:bg-amber-950/40'
+                                    : 'border-success/50 text-success bg-success/10'
                           }`}
                         >
-                          {p.status === 'retirar' ? 'Retirar' : p.status === 'admissao' ? 'Admissão' : p.status === 'vermelha' ? 'Vermelha' : 'Mantido'}
+                          {p.status === 'retirar' ? 'Retirar' : p.status === 'admissao' ? 'Admissão' : p.status === 'vermelha' ? 'Vermelha' : p.status === 'verificar' ? 'Verificar' : 'Mantido'}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -207,7 +221,55 @@ export function ResultCards({ result, manualPatients }: ResultCardsProps) {
           </div>
           <ScrollArea className="h-96">
             <div className="p-3">
-              {result.discharges.length === 0 ? (
+              {/* Uncertain discharges - requires verification */}
+              {result.uncertainDischarges.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <HelpCircle className="h-4 w-4 text-amber-600" />
+                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                      Requer verificação ({result.uncertainDischarges.length})
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700">
+                    <ul className="space-y-0">
+                      {result.uncertainDischarges.map((u, i) => (
+                        <li key={i}>
+                          <div className="py-2.5 px-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="text-sm font-semibold leading-tight">{u.patient.name}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{u.patient.sector} · Prontuário #{u.patient.prontuario}</p>
+                              </div>
+                              <Badge className="ml-2 text-[10px] bg-amber-500 text-white flex-shrink-0">
+                                Verificar
+                              </Badge>
+                            </div>
+                            <div className="mt-1.5 px-2 py-1.5 rounded bg-amber-100/60 dark:bg-amber-900/30">
+                              <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                                <span className="font-medium">Possível match no oficial:</span>{' '}
+                                {u.possibleMatch.name} · #{u.possibleMatch.prontuario} · {u.possibleMatch.sector}
+                              </p>
+                            </div>
+                          </div>
+                          {i < result.uncertainDischarges.length - 1 && <Separator className="bg-amber-200 dark:bg-amber-800" />}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Confirmed discharges */}
+              {result.uncertainDischarges.length > 0 && result.discharges.length > 0 && (
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <TrendingDown className="h-4 w-4 text-destructive" />
+                  <p className="text-xs font-semibold text-destructive">
+                    Altas confirmadas ({result.discharges.length})
+                  </p>
+                </div>
+              )}
+
+              {result.discharges.length === 0 && result.uncertainDischarges.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic text-center py-8">
                   Nenhum paciente para retirar da planilha
                 </p>

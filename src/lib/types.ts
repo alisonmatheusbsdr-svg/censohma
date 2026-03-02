@@ -28,6 +28,7 @@ export interface Patient {
 
 export interface ComparisonResult {
   discharges: Patient[];
+  uncertainDischarges: { patient: Patient; possibleMatch: Patient }[];
   admissions: Patient[];
   transfers: { patient: Patient; oldSector: string; newSector: string }[];
   vermelha: Patient[];
