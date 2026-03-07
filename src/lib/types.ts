@@ -35,6 +35,14 @@ export interface ComparisonResult {
   alerts: DataAlert[];
 }
 
+export interface AmbulatorioPatient {
+  prontuario: string;
+  name: string;
+  dataNascimento: string;
+  idade: number;
+  sexo?: 'M' | 'F' | string;
+}
+
 export interface DataAlert {
   type: 'duplicate_id' | 'homonym' | 'age_mismatch';
   message: string;

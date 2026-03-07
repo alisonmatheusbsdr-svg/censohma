@@ -8,7 +8,8 @@ import { parseOfficialFile } from '@/lib/parseOfficial';
 import { applyMapping } from '@/lib/parseManual';
 import { comparePatients, generateConsolidatedExcel } from '@/lib/compareData';
 import type { Patient, ColumnMapping, ComparisonResult, CleaningReport } from '@/lib/types';
-import { ArrowDownToLine, GitCompare, Stethoscope, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowDownToLine, GitCompare, Stethoscope, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
@@ -78,13 +79,21 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border/60 bg-card">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Stethoscope className="h-6 w-6 text-primary" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Stethoscope className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">Censo HMA</h1>
+              <p className="text-xs text-muted-foreground">Reconciliação Inteligente de Censo Hospitalar</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">HMA Census Manager</h1>
-            <p className="text-xs text-muted-foreground">Reconciliação Inteligente de Censo Hospitalar</p>
-          </div>
+          <Button variant="outline" size="sm" asChild className="gap-2">
+            <Link to="/">
+              <ArrowLeft className="w-4 h-4" />
+              Voltar ao Hub
+            </Link>
+          </Button>
         </div>
       </header>
 
