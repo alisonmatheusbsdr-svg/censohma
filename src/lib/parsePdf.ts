@@ -4,7 +4,7 @@ import type { AmbulatorioPatient, AmbulatorioResult } from './types';
 // Configure the worker to use the unpkg CDN to avoid Vite build conflicts with pdf.worker.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
-export async function parsePdfToPatients(file: File): Promise<AmbulatorioPatient[]> {
+export async function parsePdfToPatients(file: File): Promise<AmbulatorioResult> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
