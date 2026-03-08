@@ -12,6 +12,7 @@ export async function parsePdfToPatients(file: File): Promise<AmbulatorioResult>
 
     const patients: AmbulatorioPatient[] = [];
     let servico = '';
+    let dataConsulta = '';
     
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
