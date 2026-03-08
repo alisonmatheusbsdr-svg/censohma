@@ -40,6 +40,7 @@ const Ambulatorio = () => {
       } else {
         setPatients(result.patients);
         setServico(result.servico);
+        setDataConsulta(result.dataConsulta);
         toast({
           title: "Sucesso!",
           description: `${result.patients.length} pacientes extraídos do relatório.`,
