@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import type { AmbulatorioPatient } from './types';
 
-export const exportAmbulatorioToExcel = (patients: AmbulatorioPatient[], servico: string) => {
+export const exportAmbulatorioToExcel = (patients: AmbulatorioPatient[], servico: string, dataConsulta: string = '') => {
   // Define header row - "Sexo", "Cidade", "UF" are empty spaces for manual filling
   const header = ['Prontuário', 'Nome do Paciente', 'Data de Nasc.', 'Idade', 'Sexo', 'Cidade', 'UF'];
 
