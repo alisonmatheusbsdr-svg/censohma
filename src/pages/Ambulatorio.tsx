@@ -13,6 +13,7 @@ import type { AmbulatorioPatient, AmbulatorioResult } from '@/lib/types';
 const Ambulatorio = () => {
   const [patients, setPatients] = useState<AmbulatorioPatient[]>([]);
   const [servico, setServico] = useState('');
+  const [dataConsulta, setDataConsulta] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -39,6 +40,7 @@ const Ambulatorio = () => {
       } else {
         setPatients(result.patients);
         setServico(result.servico);
+        setDataConsulta(result.dataConsulta);
         toast({
           title: "Sucesso!",
           description: `${result.patients.length} pacientes extraídos do relatório.`,
@@ -66,6 +68,7 @@ const Ambulatorio = () => {
   const handleClear = () => {
     setPatients([]);
     setServico('');
+    setDataConsulta('');
   };
 
   const handleSexChange = (index: number, value: string) => {
@@ -148,7 +151,7 @@ const Ambulatorio = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">Pacientes Extraídos ({patients.length})</h2>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => exportAmbulatorioToExcel(patients, servico)} className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/30">
+                <Button variant="outline" size="sm" onClick={() => exportAmbulatorioToExcel(patients, servico, dataConsulta)} className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/30">
                   <Download className="w-4 h-4 mr-2" />
                   Baixar Excel
                 </Button>
