@@ -58,6 +58,14 @@ export async function parsePdfToPatients(file: File): Promise<AmbulatorioResult>
       const namesMatches = [...fullPageText.matchAll(idNameRegex)];
       const datesMatches = [...fullPageText.matchAll(dtNascRegex)];
 
+      // Extract Data from header (e.g., "Data: 11/03/2026")
+      if (!dataConsulta) {
+        const dataMatch = fullPageText.match(/Data:\s*(\d{2}\/\d{2}\/\d{4})/i);
+        if (dataMatch) {
+          dataConsulta = dataMatch[1];
+        }
+      }
+
       // Extract Serviço (e.g., "CLINICA MEDICA") - appears after service-related keywords
       if (!servico) {
         const servicoRegex = /(?:CONSULTA\s+(?:CLINICA\s+MEDICA|[A-ZÀ-Ÿ\s]+?))\s+((?:CLINICA\s+MEDICA|[A-ZÀ-Ÿ]+(?:\s+[A-ZÀ-Ÿ]+)*))\s+(?:PRIMEIRA|CONSULTA\s+DE)/i;
