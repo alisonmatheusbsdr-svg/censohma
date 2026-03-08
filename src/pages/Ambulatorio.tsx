@@ -68,6 +68,7 @@ const Ambulatorio = () => {
   const handleClear = () => {
     setPatients([]);
     setServico('');
+    setDataConsulta('');
   };
 
   const handleSexChange = (index: number, value: string) => {
