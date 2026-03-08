@@ -43,6 +43,11 @@ export interface AmbulatorioPatient {
   sexo?: 'M' | 'F' | string;
 }
 
+export interface AmbulatorioResult {
+  patients: AmbulatorioPatient[];
+  servico: string;
+}
+
 export interface DataAlert {
   type: 'duplicate_id' | 'homonym' | 'age_mismatch';
   message: string;
