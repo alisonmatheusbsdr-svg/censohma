@@ -84,7 +84,7 @@ export const exportAmbulatorioToExcel = (patients: AmbulatorioPatient[], servico
   XLSX.utils.book_append_sheet(wb, ws, "Ambulatório HMA");
 
   // Generate binary Excel file and trigger download
-  XLSX.writeFile(wb, generateFileName(servico));
+  XLSX.writeFile(wb, generateFileName(servico, dataConsulta));
 };
 
 const generateFileName = (servico: string) => {
