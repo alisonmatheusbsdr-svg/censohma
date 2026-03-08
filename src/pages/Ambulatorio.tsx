@@ -148,7 +148,7 @@ const Ambulatorio = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">Pacientes Extraídos ({patients.length})</h2>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => exportAmbulatorioToExcel(patients)} className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/30">
+                <Button variant="outline" size="sm" onClick={() => exportAmbulatorioToExcel(patients, servico)} className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/30">
                   <Download className="w-4 h-4 mr-2" />
                   Baixar Excel
                 </Button>

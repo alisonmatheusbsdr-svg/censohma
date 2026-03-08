@@ -94,5 +94,8 @@ const generateFileName = (servico: string) => {
     const dd = String(now.getDate()).padStart(2, '0');
     const mo = String(now.getMonth() + 1).padStart(2, '0');
     const yy = String(now.getFullYear()).slice(-2);
-    return `Ambulatorio_HMA_${dd}-${mo}-${yy}_${hh}-${mm}.xlsx`;
+    const servicoSlug = servico
+      ? `_${servico.replace(/\s+/g, '_')}`
+      : '';
+    return `Ambulatorio_HMA${servicoSlug}_${dd}-${mo}-${yy}_${hh}-${mm}.xlsx`;
 };
