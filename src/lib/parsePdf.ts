@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import type { AmbulatorioPatient } from './types';
+import type { AmbulatorioPatient, AmbulatorioResult } from './types';
 
 // Configure the worker to use the unpkg CDN to avoid Vite build conflicts with pdf.worker.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
