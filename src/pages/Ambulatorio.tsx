@@ -8,7 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
 import { parsePdfToPatients } from '@/lib/parsePdf';
 import { exportAmbulatorioToExcel } from '@/lib/exportData';
-import type { AmbulatorioPatient } from '@/lib/types';
+import type { AmbulatorioPatient, AmbulatorioResult } from '@/lib/types';
 
 const Ambulatorio = () => {
   const [patients, setPatients] = useState<AmbulatorioPatient[]>([]);
