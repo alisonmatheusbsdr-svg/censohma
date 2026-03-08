@@ -84,10 +84,10 @@ export const exportAmbulatorioToExcel = (patients: AmbulatorioPatient[], servico
   XLSX.utils.book_append_sheet(wb, ws, "Ambulatório HMA");
 
   // Generate binary Excel file and trigger download
-  XLSX.writeFile(wb, generateFileName());
+  XLSX.writeFile(wb, generateFileName(servico));
 };
 
-const generateFileName = () => {
+const generateFileName = (servico: string) => {
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
