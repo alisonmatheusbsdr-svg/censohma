@@ -29,18 +29,19 @@ const Ambulatorio = () => {
 
     setIsLoading(true);
     try {
-      const extracted = await parsePdfToPatients(file);
-      if (extracted.length === 0) {
+      const result = await parsePdfToPatients(file);
+      if (result.patients.length === 0) {
         toast({
           title: "Nenhum dado encontrado",
           description: "O PDF não parece conter listagem no formato padrão do sistema.",
           variant: "destructive"
         });
       } else {
-        setPatients(extracted);
+        setPatients(result.patients);
+        setServico(result.servico);
         toast({
           title: "Sucesso!",
-          description: `${extracted.length} pacientes extraídos do relatório.`,
+          description: `${result.patients.length} pacientes extraídos do relatório.`,
         });
       }
     } catch (error: any) {
