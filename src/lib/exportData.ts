@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import type { AmbulatorioPatient } from './types';
 
-export const exportAmbulatorioToExcel = (patients: AmbulatorioPatient[]) => {
+export const exportAmbulatorioToExcel = (patients: AmbulatorioPatient[], servico: string) => {
   // Define header row - "Sexo", "Cidade", "UF" are empty spaces for manual filling
   const header = ['Prontuário', 'Nome do Paciente', 'Data de Nasc.', 'Idade', 'Sexo', 'Cidade', 'UF'];
 
@@ -84,15 +84,18 @@ export const exportAmbulatorioToExcel = (patients: AmbulatorioPatient[]) => {
   XLSX.utils.book_append_sheet(wb, ws, "Ambulatório HMA");
 
   // Generate binary Excel file and trigger download
-  XLSX.writeFile(wb, generateFileName());
+  XLSX.writeFile(wb, generateFileName(servico));
 };
 
-const generateFileName = () => {
+const generateFileName = (servico: string) => {
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
     const mo = String(now.getMonth() + 1).padStart(2, '0');
     const yy = String(now.getFullYear()).slice(-2);
-    return `Ambulatorio_HMA_${dd}-${mo}-${yy}_${hh}-${mm}.xlsx`;
+    const servicoSlug = servico
+      ? `_${servico.replace(/\s+/g, '_')}`
+      : '';
+    return `Ambulatorio_HMA${servicoSlug}_${dd}-${mo}-${yy}_${hh}-${mm}.xlsx`;
 };

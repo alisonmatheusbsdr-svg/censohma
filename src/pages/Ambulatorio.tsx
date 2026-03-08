@@ -8,10 +8,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
 import { parsePdfToPatients } from '@/lib/parsePdf';
 import { exportAmbulatorioToExcel } from '@/lib/exportData';
-import type { AmbulatorioPatient } from '@/lib/types';
+import type { AmbulatorioPatient, AmbulatorioResult } from '@/lib/types';
 
 const Ambulatorio = () => {
   const [patients, setPatients] = useState<AmbulatorioPatient[]>([]);
+  const [servico, setServico] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -28,18 +29,19 @@ const Ambulatorio = () => {
 
     setIsLoading(true);
     try {
-      const extracted = await parsePdfToPatients(file);
-      if (extracted.length === 0) {
+      const result = await parsePdfToPatients(file);
+      if (result.patients.length === 0) {
         toast({
           title: "Nenhum dado encontrado",
           description: "O PDF não parece conter listagem no formato padrão do sistema.",
           variant: "destructive"
         });
       } else {
-        setPatients(extracted);
+        setPatients(result.patients);
+        setServico(result.servico);
         toast({
           title: "Sucesso!",
-          description: `${extracted.length} pacientes extraídos do relatório.`,
+          description: `${result.patients.length} pacientes extraídos do relatório.`,
         });
       }
     } catch (error: any) {
@@ -63,6 +65,7 @@ const Ambulatorio = () => {
 
   const handleClear = () => {
     setPatients([]);
+    setServico('');
   };
 
   const handleSexChange = (index: number, value: string) => {
@@ -145,7 +148,7 @@ const Ambulatorio = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">Pacientes Extraídos ({patients.length})</h2>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => exportAmbulatorioToExcel(patients)} className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/30">
+                <Button variant="outline" size="sm" onClick={() => exportAmbulatorioToExcel(patients, servico)} className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/30">
                   <Download className="w-4 h-4 mr-2" />
                   Baixar Excel
                 </Button>

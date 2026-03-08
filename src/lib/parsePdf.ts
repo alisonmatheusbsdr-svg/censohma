@@ -1,16 +1,17 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import type { AmbulatorioPatient } from './types';
+import type { AmbulatorioPatient, AmbulatorioResult } from './types';
 
 // Configure the worker to use the unpkg CDN to avoid Vite build conflicts with pdf.worker.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
-export async function parsePdfToPatients(file: File): Promise<AmbulatorioPatient[]> {
+export async function parsePdfToPatients(file: File): Promise<AmbulatorioResult> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let fullText = '';
 
     const patients: AmbulatorioPatient[] = [];
+    let servico = '';
     
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
@@ -56,6 +57,27 @@ export async function parsePdfToPatients(file: File): Promise<AmbulatorioPatient
       const namesMatches = [...fullPageText.matchAll(idNameRegex)];
       const datesMatches = [...fullPageText.matchAll(dtNascRegex)];
 
+      // Extract Serviço (e.g., "CLINICA MEDICA") - appears after service-related keywords
+      if (!servico) {
+        const servicoRegex = /(?:CONSULTA\s+(?:CLINICA\s+MEDICA|[A-ZÀ-Ÿ\s]+?))\s+((?:CLINICA\s+MEDICA|[A-ZÀ-Ÿ]+(?:\s+[A-ZÀ-Ÿ]+)*))\s+(?:PRIMEIRA|CONSULTA\s+DE)/i;
+        const servicoMatch = fullPageText.match(servicoRegex);
+        if (servicoMatch) {
+          servico = servicoMatch[1].trim();
+        } else {
+          // Fallback: look for the Serviço column value pattern
+          const fallbackRegex = /Servi[çc]o\s+/i;
+          const idx = fullPageText.search(fallbackRegex);
+          if (idx >= 0) {
+            // Try to find a capitalized service name after the header
+            const afterHeader = fullPageText.slice(idx);
+            const valMatch = afterHeader.match(/(?:CLINICA\s+MEDICA|CARDIOLOGIA|DERMATOLOGIA|ENDOCRINOLOGIA|GASTROENTEROLOGIA|NEUROLOGIA|ORTOPEDIA|PEDIATRIA|PNEUMOLOGIA|REUMATOLOGIA|UROLOGIA|[A-ZÀ-Ÿ]+(?:\s+[A-ZÀ-Ÿ]+)*)/i);
+            if (valMatch) {
+              servico = valMatch[0].trim();
+            }
+          }
+        }
+      }
+
       for (let j = 0; j < namesMatches.length; j++) {
         const match = namesMatches[j];
         const prontuario = match[1];
@@ -73,7 +95,7 @@ export async function parsePdfToPatients(file: File): Promise<AmbulatorioPatient
       }
     }
     
-    return patients;
+    return { patients, servico };
   } catch (error) {
     console.error("Error parsing PDF:", error);
     throw new Error("Não foi possível ler o arquivo PDF. Verifique se é um arquivo do SOULMV válido.");
