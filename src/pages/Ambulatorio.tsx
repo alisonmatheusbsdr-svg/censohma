@@ -12,6 +12,7 @@ import type { AmbulatorioPatient, AmbulatorioResult } from '@/lib/types';
 
 const Ambulatorio = () => {
   const [patients, setPatients] = useState<AmbulatorioPatient[]>([]);
+  const [servico, setServico] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
