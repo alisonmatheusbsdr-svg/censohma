@@ -87,15 +87,27 @@ export const exportAmbulatorioToExcel = (patients: AmbulatorioPatient[], servico
   XLSX.writeFile(wb, generateFileName(servico, dataConsulta));
 };
 
-const generateFileName = (servico: string) => {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mo = String(now.getMonth() + 1).padStart(2, '0');
-    const yy = String(now.getFullYear()).slice(-2);
+const generateFileName = (servico: string, dataConsulta: string) => {
     const servicoSlug = servico
       ? `_${servico.replace(/\s+/g, '_')}`
       : '';
-    return `Ambulatorio_HMA${servicoSlug}_${dd}-${mo}-${yy}_${hh}-${mm}.xlsx`;
+    
+    let dataSlug = '';
+    if (dataConsulta) {
+      // dataConsulta comes as dd/mm/yyyy -> convert to dd-mm-yy
+      const parts = dataConsulta.split('/');
+      if (parts.length === 3) {
+        dataSlug = `_${parts[0]}-${parts[1]}-${parts[2].slice(-2)}`;
+      }
+    }
+    
+    if (!dataSlug) {
+      const now = new Date();
+      const dd = String(now.getDate()).padStart(2, '0');
+      const mo = String(now.getMonth() + 1).padStart(2, '0');
+      const yy = String(now.getFullYear()).slice(-2);
+      dataSlug = `_${dd}-${mo}-${yy}`;
+    }
+
+    return `Ambulatorio_HMA${servicoSlug}${dataSlug}.xlsx`;
 };

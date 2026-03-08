@@ -104,7 +104,7 @@ export async function parsePdfToPatients(file: File): Promise<AmbulatorioResult>
       }
     }
     
-    return { patients, servico };
+    return { patients, servico, dataConsulta };
   } catch (error) {
     console.error("Error parsing PDF:", error);
     throw new Error("Não foi possível ler o arquivo PDF. Verifique se é um arquivo do SOULMV válido.");

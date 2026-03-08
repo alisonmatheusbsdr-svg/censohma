@@ -46,6 +46,7 @@ export interface AmbulatorioPatient {
 export interface AmbulatorioResult {
   patients: AmbulatorioPatient[];
   servico: string;
+  dataConsulta: string; // dd/mm/yyyy from PDF header
 }
 
 export interface DataAlert {
