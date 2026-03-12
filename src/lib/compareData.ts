@@ -129,6 +129,14 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
       }
     }
   }
+  // Surgical sector patients not in official census
+  for (const patient of cirurgicaPatients) {
+    alerts.push({
+      type: 'surgical_sector',
+      message: `Paciente ${patient.name} está na Clínica Cirúrgica e não consta no censo oficial — verificar se pertence à Clínica Médica`,
+      patients: [patient],
+    });
+  }
 
   return { discharges, uncertainDischarges, admissions, transfers, vermelha, alerts };
 }
