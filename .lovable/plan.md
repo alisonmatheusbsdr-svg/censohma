@@ -1,24 +1,29 @@
 
 
-# Pacientes da Clínica Cirúrgica como Dupla Checagem + Alerta
+# KPI Cards como Seletores de Aba
 
-## Problema
-Pacientes que estão no setor "Clínica Cirúrgica" na lista manual mas não aparecem no censo oficial são classificados como alta — quando na verdade podem estar internados pela clínica médica ocupando leitos cirúrgicos.
-
-## Solução
-Tratar pacientes do setor "Clínica Cirúrgica" de forma análoga aos da "Vermelha": separá-los dos candidatos a alta, classificá-los como **dupla checagem** (uncertainDischarges) e gerar um **alerta de dados** específico.
+## Objetivo
+Clicar num KPI card seleciona a aba correspondente na parte inferior. Sem filtragem — apenas navegação entre abas.
 
 ## Mudanças
 
-### `src/lib/compareData.ts`
-1. Adicionar detector `isCirurgica(sector)` com regex para identificar variações de "Clínica Cirúrgica" / "Cir" / "Cirurgica"
-2. Na linha onde `candidateDischarges` é filtrado (linha 35), também excluir pacientes cirúrgicos
-3. Pacientes cirúrgicos não encontrados no oficial entram em `uncertainDischarges` com `possibleMatch` como o próprio paciente (ou sem match), sinalizando necessidade de verificação manual
-4. Gerar um alerta do tipo novo `'surgical_sector'` para cada paciente cirúrgico não encontrado, com mensagem tipo: `"Paciente [nome] está na Clínica Cirúrgica e não consta no censo oficial — verificar se pertence à Clínica Médica"`
+### 1. `src/components/KPICards.tsx`
+- Atualizar `filterKey` para corresponder aos valores das abas:
+  - Censo Total → `'consolidado'`
+  - Altas → `'retirar'`
+  - Admissões → `'admissoes'`
+  - Transferências → `'setor'`
+  - Na Vermelha → `'vermelha'`
+  - Alertas → `'alertas'`
 
-### `src/lib/types.ts`
-- Adicionar `'surgical_sector'` ao union type de `DataAlert.type`
+### 2. `src/components/ResultCards.tsx`
+- Tornar `Tabs` controlado: usar `activeFilter` como `value` e expor `onValueChange`
+- Remover toda a lógica de `filteredList` — a tabela consolidada volta a mostrar todos os pacientes sempre
+- Remover indicador "(filtrado)"
+- Aceitar nova prop `onTabChange` para sincronizar quando o usuário clica diretamente numa aba
 
-### Visualização (sem mudanças)
-Os pacientes já aparecerão automaticamente na aba "Verificar" (uncertainDischarges) e na aba "Alertas" por usarem as estruturas existentes.
+### 3. `src/pages/Index.tsx`
+- Inicializar `activeFilter` como `'consolidado'` em vez de `null`
+- Passar `onTabChange={setActiveFilter}` para `ResultCards`
+- Atualizar props de `KPICards`: card ativo quando `activeFilter` bate com o `filterKey`
 
