@@ -28,11 +28,13 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
   manual.forEach(p => manualMap.set(p.prontuario, p));
   official.forEach(p => officialMap.set(p.prontuario, p));
 
-  // Separate "Vermelha" patients from discharges
+  // Separate "Vermelha" and "Clínica Cirúrgica" patients from discharges
   const isVermelha = (sector: string) => /vermelh[ao]?/i.test(sector.trim());
+  const isCirurgica = (sector: string) => /cir[uú]rgica|\\bcir\\b/i.test(sector.trim());
   const notInOfficial = manual.filter(p => !officialMap.has(p.prontuario));
   const vermelha = notInOfficial.filter(p => isVermelha(p.sector));
-  const candidateDischarges = notInOfficial.filter(p => !isVermelha(p.sector));
+  const cirurgicaPatients = notInOfficial.filter(p => !isVermelha(p.sector) && isCirurgica(p.sector));
+  const candidateDischarges = notInOfficial.filter(p => !isVermelha(p.sector) && !isCirurgica(p.sector));
 
   // Double-check: name matching for uncertain discharges
   const discharges: Patient[] = [];
@@ -47,6 +49,11 @@ export function comparePatients(manual: Patient[], official: Patient[]): Compari
     } else {
       discharges.push(patient);
     }
+  }
+
+  // Clínica Cirúrgica patients → uncertainDischarges + alert
+  for (const patient of cirurgicaPatients) {
+    uncertainDischarges.push({ patient, possibleMatch: patient });
   }
 
   // Admissions: in official but NOT in manual

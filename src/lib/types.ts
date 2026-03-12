@@ -50,7 +50,7 @@ export interface AmbulatorioResult {
 }
 
 export interface DataAlert {
-  type: 'duplicate_id' | 'homonym' | 'age_mismatch';
+  type: 'duplicate_id' | 'homonym' | 'age_mismatch' | 'surgical_sector';
   message: string;
   patients: Patient[];
 }
